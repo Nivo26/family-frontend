@@ -12,7 +12,6 @@ import {
   Settings,
   Trash2,
   Users,
-  Link as LinkIcon,
   Copy,
 } from 'lucide-react';
 
@@ -79,10 +78,10 @@ const initialTabs = [
 ];
 
 const initialTasks = [
-  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', note: 'Följ upp med kvitto.' },
-  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', note: 'Joh 15 och bön i slutet.' },
-  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', note: 'Mjölk, pasta och frukt.' },
-  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', note: '' },
+  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', reminderMinutes: 10, note: 'Följ upp med kvitto.' },
+  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', reminderMinutes: 30, note: 'Joh 15 och bön i slutet.' },
+  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', reminderMinutes: 60, note: 'Mjölk, pasta och frukt.' },
+  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '' },
 ];
 
 const initialPrayers = [
@@ -231,24 +230,23 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [newItemTime, setNewItemTime] = useState('');
+  const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
   const [editTaskId, setEditTaskId] = useState(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDue, setEditTaskDue] = useState('');
   const [editTaskTime, setEditTaskTime] = useState('');
+  const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
   const [editTaskNote, setEditTaskNote] = useState('');
-  const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
-const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
-const [notificationPermission, setNotificationPermission] = useState(
-  typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
-);
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showCalendarInfo, setShowCalendarInfo] = useState(false);
   const [newTabName, setNewTabName] = useState('');
   const [newTabColor, setNewTabColor] = useState(tabColors[0]);
   const [newMemberName, setNewMemberName] = useState('');
   const [newFamilyName, setNewFamilyName] = useState('');
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
 
   const [backendStatus, setBackendStatus] = useState('Ansluter till backend...');
   const [hasLoadedFromBackend, setHasLoadedFromBackend] = useState(false);
@@ -346,11 +344,13 @@ const [notificationPermission, setNotificationPermission] = useState(
 
     savePlanner();
   }, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('Notification' in window)) return;
     setNotificationPermission(Notification.permission);
   }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('Notification' in window)) return;
@@ -391,8 +391,6 @@ const [notificationPermission, setNotificationPermission] = useState(
   );
   const safeCurrentTab = visibleTabs.find((tab) => tab.id === currentTab)?.id || visibleTabs[0]?.id || 'biz';
   const currentTabInfo = tabs.find((tab) => tab.id === safeCurrentTab) || tabs[0];
-  const currentOwner = members.find((member) => member.id === currentTabInfo?.ownerId);
-  const currentSharedMembers = members.filter((member) => currentTabInfo?.sharedWith?.includes(member.id));
   const currentTasks = tasks.filter((task) => task.area === safeCurrentTab);
 
   const grouped = useMemo(() => {
@@ -456,13 +454,32 @@ const [notificationPermission, setNotificationPermission] = useState(
     }
   }
 
+  async function reloadFromBackend() {
+    setBackendStatus(`Laddar om från backend · ${familyId}...`);
+    try {
+      const response = await fetch(apiUrlWithFamily);
+      const data = await response.json();
+      if (data.members) setMembers(data.members);
+      if (data.tabs) setTabs(data.tabs);
+      if (data.tasks) setTasks(data.tasks);
+      if (data.prayers) setPrayers(data.prayers);
+      if (data.currentTab) setCurrentTab(data.currentTab);
+      if (data.selectedDate) setSelectedDate(data.selectedDate);
+      setBackendStatus(`Synkad med backend · ${familyId}`);
+    } catch (error) {
+      console.error('Kunde inte ladda om från backend:', error);
+      setBackendStatus(`Backend ej nåbar – behåller nuvarande data för ${familyId}`);
+    }
+  }
+
   function addItem() {
     const trimmed = newItem.trim();
     if (!trimmed) return;
+
     if (safeCurrentTab === 'prayer') {
-      setPrayers((prev) => [...prev, { id: 'p' + Date.now().toString(), title: trimmed, answered: false }]);
+      setPrayers((prev) => [...prev, { id: `p${Date.now()}`, title: trimmed, answered: false }]);
     } else {
-            setTasks((prev) => [
+      setTasks((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
@@ -476,10 +493,11 @@ const [notificationPermission, setNotificationPermission] = useState(
         },
       ]);
     }
+
     setNewItem('');
-setNewItemTime('');
-setNewItemReminderMinutes('');
-setShowModal(false);
+    setNewItemTime('');
+    setNewItemReminderMinutes('');
+    setShowModal(false);
   }
 
   function moveTask(taskId, nextStatus) {
@@ -499,7 +517,7 @@ setShowModal(false);
     setPrayers((prev) => prev.filter((prayer) => prayer.id !== prayerId));
   }
 
-    function openEditTask(task) {
+  function openEditTask(task) {
     setEditTaskId(task.id);
     setEditTaskTitle(task.title);
     setEditTaskDue(task.due || '');
@@ -512,7 +530,7 @@ setShowModal(false);
     setEditTaskNote(task.note || '');
   }
 
-    function closeEditTask() {
+  function closeEditTask() {
     setEditTaskId(null);
     setEditTaskTitle('');
     setEditTaskDue('');
@@ -521,7 +539,7 @@ setShowModal(false);
     setEditTaskNote('');
   }
 
-    function saveEditedTask() {
+  function saveEditedTask() {
     const trimmed = editTaskTitle.trim();
     if (!trimmed || !editTaskId) return;
 
@@ -600,27 +618,37 @@ setShowModal(false);
   function removeMember(memberId) {
     if (memberId === 'm1') return;
     setMembers((prev) => prev.filter((member) => member.id !== memberId));
-    setTabs((prev) => prev.map((tab) => ({ ...tab, sharedWith: (tab.sharedWith || []).filter((id) => id !== memberId), ownerId: tab.ownerId === memberId ? 'm1' : tab.ownerId })));
+    setTabs((prev) =>
+      prev.map((tab) => ({
+        ...tab,
+        sharedWith: (tab.sharedWith || []).filter((id) => id !== memberId),
+        ownerId: tab.ownerId === memberId ? 'm1' : tab.ownerId,
+      }))
+    );
   }
 
   function renameMember(memberId, name) {
-    setMembers((prev) => prev.map((member) => member.id === memberId ? { ...member, name } : member));
+    setMembers((prev) => prev.map((member) => (member.id === memberId ? { ...member, name } : member)));
   }
 
   function toggleTabShared(tabId) {
-    setTabs((prev) => prev.map((tab) => tab.id === tabId ? { ...tab, isShared: !tab.isShared, sharedWith: tab.isShared ? [] : (tab.sharedWith || []) } : tab));
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === tabId ? { ...tab, isShared: !tab.isShared, sharedWith: tab.isShared ? [] : (tab.sharedWith || []) } : tab))
+    );
   }
 
   function toggleShareWithMember(tabId, memberId) {
-    setTabs((prev) => prev.map((tab) => {
-      if (tab.id !== tabId) return tab;
-      const hasMember = (tab.sharedWith || []).includes(memberId);
-      return {
-        ...tab,
-        sharedWith: hasMember ? (tab.sharedWith || []).filter((id) => id !== memberId) : [...(tab.sharedWith || []), memberId],
-        isShared: true,
-      };
-    }));
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const hasMember = (tab.sharedWith || []).includes(memberId);
+        return {
+          ...tab,
+          sharedWith: hasMember ? (tab.sharedWith || []).filter((id) => id !== memberId) : [...(tab.sharedWith || []), memberId],
+          isShared: true,
+        };
+      })
+    );
   }
 
   function updateFamilyName() {
@@ -650,13 +678,12 @@ setShowModal(false);
         <header className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-4 md:px-6" style={{ background: palette.white, borderColor: palette.border }}>
           <div>
             <div className="text-sm font-semibold">MIGHTY PLANNER</div>
-            <div className="mt-1 text-[11px]" style={{ color: palette.subtext }}>Hushåll: {getDisplayFamilyName(familyId)}</div>
-            <div className="mt-1 text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : '#888' }}>{backendStatus}</div>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            <div className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: palette.border, background: palette.white, color: palette.subtext }}>
-              Hushåll: {getDisplayFamilyName(familyId)}
+            <div className="mt-1 text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : palette.subtext }}>
+              {backendStatus}
             </div>
+          </div>
+
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: palette.border, background: palette.white }}>
               <div className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: currentTabInfo?.color || palette.biz }}>
                 {getMemberBadge(members.find((m) => m.id === activeMemberId)?.name || '')}
@@ -676,93 +703,12 @@ setShowModal(false);
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCalendarInfo((prev) => !prev)}
-              className="rounded-xl border px-3 py-2 text-xs flex items-center gap-2"
-              style={{ borderColor: palette.border, background: palette.white }}
-            >
-              <LinkIcon size={14} />
-              Kalender
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                setBackendStatus(`Laddar om från backend · ${familyId}...`);
-                try {
-                  const response = await fetch(apiUrlWithFamily);
-                  const data = await response.json();
-                  if (data.members) setMembers(data.members);
-                  if (data.tabs) setTabs(data.tabs);
-                  if (data.tasks) setTasks(data.tasks);
-                  if (data.prayers) setPrayers(data.prayers);
-                  if (data.currentTab) setCurrentTab(data.currentTab);
-                  if (data.selectedDate) setSelectedDate(data.selectedDate);
-                  setBackendStatus(`Synkad med backend · ${familyId}`);
-                } catch (error) {
-                  console.error('Kunde inte ladda om från backend:', error);
-                  setBackendStatus(`Backend ej nåbar – behåller nuvarande data för ${familyId}`);
-                }
-              }}
-              className="rounded-xl border px-3 py-2 text-xs"
-              style={{ borderColor: palette.border, background: palette.white }}
-            >
-                <button
-  type="button"
-  onClick={enableNotifications}
-  className="rounded-xl border px-3 py-2 text-xs"
-  style={{ borderColor: palette.border, background: palette.white }}
->
-  {notificationPermission === 'granted' ? 'Notiser aktiva' : 'Aktivera notiser'}
-</button>
-             <button
-              type="button"
-              onClick={enableNotifications}
-              className="rounded-xl border px-3 py-2 text-xs"
-              style={{ borderColor: palette.border, background: palette.white }}
-            >
-              {notificationPermission === 'granted' ? 'Notiser aktiva' : 'Aktivera notiser'}
-            </button>   
-              Ladda om
-            </button>
+
             <button type="button" onClick={() => setShowSettings(true)} className="rounded-xl border p-2" style={{ borderColor: palette.border, background: palette.white }}>
               <Settings size={16} />
             </button>
           </div>
         </header>
-
-        {showCalendarInfo && (
-          <div className="border-b px-4 py-3 md:px-6" style={{ background: '#fafaf7', borderColor: palette.border }}>
-            <div className="mb-2 text-sm font-semibold">Kalenderlänk för prenumeration</div>
-            <div className="mb-3 text-xs" style={{ color: palette.subtext }}>
-              Använd den här länken i Apple Kalender eller annan kalenderapp som stöder abonnerade kalendrar.
-            </div>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <input
-                value={calendarUrl}
-                readOnly
-                className="flex-1 rounded-xl border px-3 py-2 text-xs outline-none"
-                style={{ borderColor: palette.border, background: palette.white }}
-              />
-              <button
-                type="button"
-                onClick={copyCalendarUrl}
-                className="rounded-xl border px-3 py-2 text-xs flex items-center justify-center gap-2"
-                style={{ borderColor: palette.border, background: palette.white }}
-              >
-                <Copy size={14} />
-                Kopiera kalenderlänk
-              </button>
-              <a
-                href={calendarUrl.replace('https://', 'webcal://')}
-                className="rounded-xl border px-3 py-2 text-xs text-center"
-                style={{ borderColor: palette.border, background: palette.white }}
-              >
-                Öppna i kalender
-              </a>
-            </div>
-          </div>
-        )}
 
         <div className="flex gap-2 overflow-x-auto border-b px-4 py-2" style={{ background: palette.white, borderColor: palette.border }}>
           {visibleTabs.map((tab) => {
@@ -770,15 +716,28 @@ setShowModal(false);
             const active = safeCurrentTab === tab.id;
             const ownerName = getMemberName(members, tab.ownerId);
             const sharedCount = (tab.sharedWith || []).length;
+
             return (
-              <button key={tab.id} type="button" onClick={() => setCurrentTab(tab.id)} className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition whitespace-nowrap" style={{ background: active ? tab.color : palette.white, color: active ? '#ffffff' : palette.text, borderColor: active ? tab.color : palette.border }}>
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCurrentTab(tab.id)}
+                className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition whitespace-nowrap"
+                style={{
+                  background: active ? tab.color : palette.white,
+                  color: active ? '#ffffff' : palette.text,
+                  borderColor: active ? tab.color : palette.border,
+                }}
+              >
                 <Icon size={16} />
                 <span>{tab.label}</span>
+
                 {!active && (
                   <span className="rounded-full px-2 py-[2px] text-[10px]" style={{ background: palette.soft, color: palette.subtext }}>
                     {ownerName}
                   </span>
                 )}
+
                 {tab.isShared && sharedCount > 0 && (
                   <span className="rounded-full px-2 py-[2px] text-[10px]" style={{ background: active ? 'rgba(255,255,255,0.18)' : '#e1f5ee', color: active ? '#fff' : '#1D9E75' }}>
                     Delad
@@ -789,16 +748,20 @@ setShowModal(false);
           })}
         </div>
 
-
-
         <div className="grid flex-1 grid-cols-1 md:grid-cols-[250px_1fr]">
           <aside className="hidden border-r md:flex md:flex-col" style={{ background: palette.white, borderColor: palette.border }}>
             <div className="p-4 pb-0">
-              <button type="button" onClick={() => setShowModal(true)} className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-95" style={{ background: palette.text }}>
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-95"
+                style={{ background: palette.text }}
+              >
                 <Plus size={16} />
                 {safeCurrentTab === 'prayer' ? 'Nytt böneämne' : 'Ny uppgift'}
               </button>
             </div>
+
             <div className="flex flex-1 flex-col gap-5 p-4">
               <SidebarSection title="Kalender">
                 <div className="rounded-2xl border p-3.5" style={{ background: palette.white, borderColor: palette.border }}>
@@ -810,45 +773,67 @@ setShowModal(false);
                 <div className="rounded-2xl border p-3" style={{ background: palette.white, borderColor: palette.border }}>
                   <div className="mb-2 text-xs font-semibold" style={{ color: palette.subtext }}>{formatLongDate(selectedDate)}</div>
                   <div className="space-y-2">
-                    {selectedDateTasks.length === 0 ? <div className="text-xs" style={{ color: '#bbb' }}>Inga uppgifter denna dag</div> : selectedDateTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => openEditTask(task)}
-                        className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs"
-                        style={{ borderLeftColor: currentTabInfo.color, background: palette.page }}
-                      >
-                        <div className="text-[12px] text-neutral-800">{task.title}</div>
-                        {task.dueTime ? (
-                          <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div>
-                        ) : null}
-                        {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
-                      </button>
-                    ))}
+                    {selectedDateTasks.length === 0 ? (
+                      <div className="text-xs" style={{ color: '#bbb' }}>Inga uppgifter denna dag</div>
+                    ) : (
+                      selectedDateTasks.map((task) => (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => openEditTask(task)}
+                          className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs"
+                          style={{ borderLeftColor: currentTabInfo.color, background: palette.page }}
+                        >
+                          <div className="text-[12px] text-neutral-800">{task.title}</div>
+                          {task.dueTime ? <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div> : null}
+                          {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               </SidebarSection>
 
               <SidebarSection title="Kommande">
                 <div className="space-y-2">
-                  {upcoming.length === 0 ? <div className="rounded-r-md border-l-2 px-3 py-2 text-xs" style={{ borderLeftColor: '#d9d9d4', background: palette.page, color: '#bbb' }}>Inget planerat än</div> : upcoming.map((item) => {
-                    const itemTab = tabs.find((t) => t.id === item.area);
-                    return (
-                      <button key={item.id} type="button" className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs transition hover:opacity-90" style={{ borderLeftColor: itemTab?.color || palette.biz, background: palette.page }} onClick={() => { setCurrentTab(item.area); setSelectedDate(item.due); }}>
-                        <div className="mb-0.5 text-[10px]" style={{ color: '#aaa' }}>
-                          {formatShortDate(item.due)}
-                          {item.dueTime ? ` kl ${formatTime(item.dueTime)}` : ''}
-                        </div>
-                        <div className="text-[12px] text-neutral-800">{item.title}</div>
-                      </button>
-                    );
-                  })}
+                  {upcoming.length === 0 ? (
+                    <div className="rounded-r-md border-l-2 px-3 py-2 text-xs" style={{ borderLeftColor: '#d9d9d4', background: palette.page, color: '#bbb' }}>
+                      Inget planerat än
+                    </div>
+                  ) : (
+                    upcoming.map((item) => {
+                      const itemTab = tabs.find((t) => t.id === item.area);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs transition hover:opacity-90"
+                          style={{ borderLeftColor: itemTab?.color || palette.biz, background: palette.page }}
+                          onClick={() => {
+                            setCurrentTab(item.area);
+                            setSelectedDate(item.due);
+                          }}
+                        >
+                          <div className="mb-0.5 text-[10px]" style={{ color: '#aaa' }}>
+                            {formatShortDate(item.due)}
+                            {item.dueTime ? ` kl ${formatTime(item.dueTime)}` : ''}
+                          </div>
+                          <div className="text-[12px] text-neutral-800">{item.title}</div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </SidebarSection>
 
               <SidebarSection title="Översikt">
                 <div className="grid grid-cols-2 gap-2">
-                  {[[ 'Att göra', stats.todo ], [ 'Pågående', stats.doing ], [ 'Klara', stats.done ], [ 'Bön kvar', stats.prayers ]].map(([label, value]) => (
+                  {[
+                    ['Att göra', stats.todo],
+                    ['Pågående', stats.doing],
+                    ['Klara', stats.done],
+                    ['Bön kvar', stats.prayers],
+                  ].map(([label, value]) => (
                     <div key={label} className="rounded-lg px-3 py-2.5" style={{ background: palette.soft }}>
                       <div className="text-[22px] font-semibold leading-none">{value}</div>
                       <div className="mt-1 text-[10px]" style={{ color: '#aaa' }}>{label}</div>
@@ -866,6 +851,7 @@ setShowModal(false);
                   <h2 className="text-lg font-semibold">Bönelista</h2>
                   <span className="rounded-full px-3 py-1 text-xs" style={{ background: palette.soft }}>{prayers.length} st</span>
                 </div>
+
                 <div className="space-y-3">
                   {prayers.map((prayer) => (
                     <div key={prayer.id} className="flex items-center justify-between gap-3 rounded-2xl border p-4" style={{ borderColor: palette.border, background: prayer.answered ? '#e1f5ee' : palette.white }}>
@@ -878,7 +864,9 @@ setShowModal(false);
                           <div className="text-xs text-neutral-500">{prayer.answered ? 'Besvarad' : 'Pågående bön'}</div>
                         </div>
                       </div>
-                      <button type="button" onClick={() => deletePrayer(prayer.id)} className="rounded-xl px-3 py-1.5 text-xs text-red-700" style={{ background: '#fcebeb' }}>Ta bort</button>
+                      <button type="button" onClick={() => deletePrayer(prayer.id)} className="rounded-xl px-3 py-1.5 text-xs text-red-700" style={{ background: '#fcebeb' }}>
+                        Ta bort
+                      </button>
                     </div>
                   ))}
                   {prayers.length === 0 && <div className="rounded-2xl border border-dashed p-4 text-sm text-neutral-400" style={{ borderColor: palette.border }}>Inga böneämnen än.</div>}
@@ -891,6 +879,7 @@ setShowModal(false);
                 {Object.entries(columnLabels).map(([key, label]) => {
                   const dotColor = key === 'todo' ? '#cfcfc8' : currentTabInfo.color;
                   const isDragOver = dragOverStatus === key;
+
                   return (
                     <section key={key} className="min-w-0">
                       <div className="mb-2 flex items-center justify-between px-1 py-1">
@@ -900,19 +889,67 @@ setShowModal(false);
                         </div>
                         <span className="rounded-full px-2 py-[2px] text-[11px]" style={{ background: '#e8e8e3', color: '#999' }}>{grouped[key].length}</span>
                       </div>
-                      <div className="min-h-[80px] rounded-xl p-1 transition" style={{ background: isDragOver ? 'rgba(0,0,0,0.04)' : 'transparent' }} onDragOver={(e) => { e.preventDefault(); setDragOverStatus(key); }} onDragLeave={() => setDragOverStatus((prev) => (prev === key ? null : prev))} onDrop={() => handleDrop(key)}>
+
+                      <div
+                        className="min-h-[80px] rounded-xl p-1 transition"
+                        style={{ background: isDragOver ? 'rgba(0,0,0,0.04)' : 'transparent' }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverStatus(key);
+                        }}
+                        onDragLeave={() => setDragOverStatus((prev) => (prev === key ? null : prev))}
+                        onDrop={() => handleDrop(key)}
+                      >
                         <div className="space-y-2">
                           {grouped[key].map((task) => (
-                            <div key={task.id} draggable onDragStart={() => handleDragStart(task.id)} onDragEnd={() => { setDraggingTaskId(null); setDragOverStatus(null); }} className="group rounded-xl bg-white px-3 py-3 shadow-sm transition hover:shadow-md" style={{ border: `1px solid ${palette.border}`, borderLeft: key === 'doing' ? `3px solid ${currentTabInfo.color}` : `1px solid ${palette.border}`, borderRadius: key === 'doing' ? '0 12px 12px 0' : '12px', opacity: draggingTaskId === task.id ? 0.5 : key === 'done' ? 0.6 : 1, cursor: 'grab' }}>
+                            <div
+                              key={task.id}
+                              draggable
+                              onDragStart={() => handleDragStart(task.id)}
+                              onDragEnd={() => {
+                                setDraggingTaskId(null);
+                                setDragOverStatus(null);
+                              }}
+                              className="group rounded-xl bg-white px-3 py-3 shadow-sm transition hover:shadow-md"
+                              style={{
+                                border: `1px solid ${palette.border}`,
+                                borderLeft: key === 'doing' ? `3px solid ${currentTabInfo.color}` : `1px solid ${palette.border}`,
+                                borderRadius: key === 'doing' ? '0 12px 12px 0' : '12px',
+                                opacity: draggingTaskId === task.id ? 0.5 : key === 'done' ? 0.6 : 1,
+                                cursor: 'grab',
+                              }}
+                            >
                               <div className="mb-2 flex items-start justify-between gap-2">
                                 <div className="flex min-w-0 items-start gap-2">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, task.status === 'done' ? 'todo' : 'done'); }} className="mt-[2px] h-4 w-4 rounded border" style={{ borderColor: '#bbb', background: task.status === 'done' ? palette.family : '#fff' }} />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      moveTask(task.id, task.status === 'done' ? 'todo' : 'done');
+                                    }}
+                                    className="mt-[2px] h-4 w-4 rounded border"
+                                    style={{ borderColor: '#bbb', background: task.status === 'done' ? palette.family : '#fff' }}
+                                  />
                                   <button type="button" onClick={() => openEditTask(task)} className="min-w-0 text-left">
-                                    <div className="text-[13px] font-medium leading-snug" style={{ textDecoration: key === 'done' ? 'line-through' : 'none' }}>{task.title}</div>
+                                    <div className="text-[13px] font-medium leading-snug" style={{ textDecoration: key === 'done' ? 'line-through' : 'none' }}>
+                                      {task.title}
+                                    </div>
                                   </button>
                                 </div>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }} className="opacity-0 group-hover:opacity-100 text-[10px]" style={{ color: '#aaa' }}>✕</button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteTask(task.id);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 text-[10px]"
+                                  style={{ color: '#aaa' }}
+                                >
+                                  ✕
+                                </button>
                               </div>
+
                               <button type="button" onClick={() => openEditTask(task)} className="mb-2 w-full text-left">
                                 <div className="flex items-center justify-between text-[10px] gap-2">
                                   <div className="flex items-center gap-2 flex-wrap">
@@ -925,18 +962,16 @@ setShowModal(false);
                                     {task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}
                                   </span>
                                 </div>
+
                                 {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
                                   <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
                                     Påminnelse: {getReminderLabel(task.reminderMinutes)}
                                   </div>
                                 ) : null}
-                                {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
-  <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
-    Påminnelse: {getReminderLabel(task.reminderMinutes)}
-  </div>
-) : null}
-{task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
+
+                                {task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
                               </button>
+
                               <div className="flex flex-wrap gap-1 text-[10px]">
                                 {key !== 'todo' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'todo'); }} className="rounded-md px-2 py-[3px]" style={{ background: palette.soft }}>Att göra</button>}
                                 {key !== 'doing' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'doing'); }} className="rounded-md px-2 py-[3px]" style={{ background: '#e6f1fb' }}>Pågående</button>}
@@ -944,9 +979,19 @@ setShowModal(false);
                               </div>
                             </div>
                           ))}
-                          {grouped[key].length === 0 && <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-xl border border-dashed px-3 py-3 text-center text-[12px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>+ Lägg till</button>}
+
+                          {grouped[key].length === 0 && (
+                            <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-xl border border-dashed px-3 py-3 text-center text-[12px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                              + Lägg till
+                            </button>
+                          )}
                         </div>
-                        {grouped[key].length > 0 && <button type="button" onClick={() => setShowModal(true)} className="mt-2 w-full rounded-xl border border-dashed px-3 py-2 text-center text-[12px] transition hover:bg-white" style={{ borderColor: '#d5d5d0', color: '#bbb' }}>+ Lägg till</button>}
+
+                        {grouped[key].length > 0 && (
+                          <button type="button" onClick={() => setShowModal(true)} className="mt-2 w-full rounded-xl border border-dashed px-3 py-2 text-center text-[12px] transition hover:bg-white" style={{ borderColor: '#d5d5d0', color: '#bbb' }}>
+                            + Lägg till
+                          </button>
+                        )}
                       </div>
                     </section>
                   );
@@ -965,39 +1010,103 @@ setShowModal(false);
             <div className="w-full max-w-md rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{safeCurrentTab === 'prayer' ? 'Nytt böneämne' : 'Ny uppgift'}</h3>
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-full p-2" style={{ background: palette.soft }}><X size={16} /></button>
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-full p-2" style={{ background: palette.soft }}>
+                  <X size={16} />
+                </button>
               </div>
-              <div className="mb-3 text-sm text-neutral-500">{safeCurrentTab === 'prayer' ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${currentTabInfo.label}`}</div>
+
+              <div className="mb-3 text-sm text-neutral-500">
+                {safeCurrentTab === 'prayer' ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${currentTabInfo.label}`}
+              </div>
+
               <div className="mb-3 text-[11px] text-neutral-400">Sparas till backend i hushållet. Profilvalet minns den här enheten lokalt.</div>
-              <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder={safeCurrentTab === 'prayer' ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'} className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
+
+              <input
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                placeholder={safeCurrentTab === 'prayer' ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
+                className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border }}
+              />
+
               {safeCurrentTab !== 'prayer' && (
-                <input
-                  type="time"
-                  value={newItemTime}
-                  onChange={(e) => setNewItemTime(e.target.value)}
-                  className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
-                  style={{ borderColor: palette.border }}
-                />
+                <>
+                  <input
+                    type="time"
+                    value={newItemTime}
+                    onChange={(e) => setNewItemTime(e.target.value)}
+                    className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                    style={{ borderColor: palette.border }}
+                  />
+
+                  <select
+                    value={newItemReminderMinutes}
+                    onChange={(e) => setNewItemReminderMinutes(e.target.value)}
+                    className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  >
+                    <option value="">Ingen påminnelse</option>
+                    <option value="0">Vid starttid</option>
+                    <option value="5">5 min före</option>
+                    <option value="10">10 min före</option>
+                    <option value="15">15 min före</option>
+                    <option value="30">30 min före</option>
+                    <option value="60">1 tim före</option>
+                    <option value="120">2 tim före</option>
+                    <option value="1440">1 dag före</option>
+                  </select>
+                </>
               )}
-                            {safeCurrentTab !== 'prayer' && (
-                <select
-                  value={newItemReminderMinutes}
-                  onChange={(e) => setNewItemReminderMinutes(e.target.value)}
-                  className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
-                  style={{ borderColor: palette.border, background: palette.white }}
-                >
-                  <option value="">Ingen påminnelse</option>
-                  <option value="0">Vid starttid</option>
-                  <option value="5">5 min före</option>
-                  <option value="10">10 min före</option>
-                  <option value="15">15 min före</option>
-                  <option value="30">30 min före</option>
-                  <option value="60">1 tim före</option>
-                  <option value="120">2 tim före</option>
-                  <option value="1440">1 dag före</option>
-                </select>
-              )}
-                            <select
+
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>
+                  Avbryt
+                </button>
+                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>
+                  Spara
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editTaskId && (
+          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Redigera uppgift</h3>
+                <button type="button" onClick={closeEditTask} className="rounded-full p-2" style={{ background: palette.soft }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mb-3 text-sm text-neutral-500">Uppgiften ligger i fliken: {currentTabInfo.label}</div>
+
+              <input
+                value={editTaskTitle}
+                onChange={(e) => setEditTaskTitle(e.target.value)}
+                placeholder="Uppgiftens namn"
+                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border }}
+              />
+
+              <input
+                type="date"
+                value={editTaskDue}
+                onChange={(e) => setEditTaskDue(e.target.value)}
+                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border }}
+              />
+
+              <input
+                type="time"
+                value={editTaskTime}
+                onChange={(e) => setEditTaskTime(e.target.value)}
+                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border }}
+              />
+
+              <select
                 value={editTaskReminderMinutes}
                 onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
                 className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
@@ -1013,53 +1122,26 @@ setShowModal(false);
                 <option value="120">2 tim före</option>
                 <option value="1440">1 dag före</option>
               </select>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>Avbryt</button>
-                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>Spara</button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {editTaskId && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Redigera uppgift</h3>
-                <button type="button" onClick={closeEditTask} className="rounded-full p-2" style={{ background: palette.soft }}><X size={16} /></button>
-              </div>
-              <div className="mb-3 text-sm text-neutral-500">Uppgiften ligger i fliken: {currentTabInfo.label}</div>
-              <input value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} placeholder="Uppgiftens namn" className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
-              <input type="date" value={editTaskDue} onChange={(e) => setEditTaskDue(e.target.value)} className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
-              <input
-                type="time"
-                value={editTaskTime}
-                onChange={(e) => setEditTaskTime(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+              <textarea
+                value={editTaskNote}
+                onChange={(e) => setEditTaskNote(e.target.value)}
+                placeholder="Notering"
+                className="mb-4 min-h-[100px] w-full rounded-2xl border px-4 py-3 outline-none"
                 style={{ borderColor: palette.border }}
               />
-              <select
-  value={editTaskReminderMinutes}
-  onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
-  className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
-  style={{ borderColor: palette.border, background: palette.white }}
->
-  <option value="">Ingen påminnelse</option>
-  <option value="0">Vid starttid</option>
-  <option value="5">5 min före</option>
-  <option value="10">10 min före</option>
-  <option value="15">15 min före</option>
-  <option value="30">30 min före</option>
-  <option value="60">1 tim före</option>
-  <option value="120">2 tim före</option>
-  <option value="1440">1 dag före</option>
-</select>
-              <textarea value={editTaskNote} onChange={(e) => setEditTaskNote(e.target.value)} placeholder="Notering" className="mb-4 min-h-[100px] w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
+
               <div className="flex justify-between gap-2">
-                <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-2 text-sm text-red-700" style={{ background: '#fcebeb' }}>Ta bort</button>
+                <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-2 text-sm text-red-700" style={{ background: '#fcebeb' }}>
+                  Ta bort
+                </button>
                 <div className="flex gap-2">
-                  <button type="button" onClick={closeEditTask} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>Avbryt</button>
-                  <button type="button" onClick={saveEditedTask} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>Spara</button>
+                  <button type="button" onClick={closeEditTask} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>
+                    Avbryt
+                  </button>
+                  <button type="button" onClick={saveEditedTask} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>
+                    Spara
+                  </button>
                 </div>
               </div>
             </div>
@@ -1070,8 +1152,77 @@ setShowModal(false);
           <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-2xl rounded-3xl p-5 shadow-xl max-h-[80vh] overflow-y-auto" style={{ background: palette.white }}>
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Inställningar för flikar</h3>
-                <button type="button" onClick={() => setShowSettings(false)} className="rounded-full p-2" style={{ background: palette.soft }}><X size={16} /></button>
+                <h3 className="text-lg font-semibold">Inställningar</h3>
+                <button type="button" onClick={() => setShowSettings(false)} className="rounded-full p-2" style={{ background: palette.soft }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mb-4 rounded-2xl border p-4" style={{ borderColor: palette.border, background: palette.page }}>
+                <div className="mb-3 text-sm font-semibold">Kalender och notiser</div>
+
+                <div className="mb-2 text-[11px]" style={{ color: palette.subtext }}>
+                  Hushåll: {getDisplayFamilyName(familyId)}
+                </div>
+
+                <div className="mb-3 text-[11px]" style={{ color: palette.subtext }}>
+                  Kalenderlänk för Apple Kalender och andra appar som stöder prenumeration.
+                </div>
+
+                <div className="mb-3 flex flex-col gap-2">
+                  <input
+                    value={calendarUrl}
+                    readOnly
+                    className="w-full rounded-xl border px-3 py-2 text-xs outline-none"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={copyCalendarUrl}
+                      className="rounded-xl border px-3 py-2 text-xs flex items-center gap-2"
+                      style={{ borderColor: palette.border, background: palette.white }}
+                    >
+                      <Copy size={14} />
+                      Kopiera kalenderlänk
+                    </button>
+
+                    <a
+                      href={calendarUrl.replace('https://', 'webcal://')}
+                      className="rounded-xl border px-3 py-2 text-xs text-center"
+                      style={{ borderColor: palette.border, background: palette.white }}
+                    >
+                      Öppna i kalender
+                    </a>
+                  </div>
+                </div>
+
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={enableNotifications}
+                    className="rounded-xl border px-3 py-2 text-xs"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  >
+                    {notificationPermission === 'granted' ? 'Notiser aktiva' : 'Aktivera notiser'}
+                  </button>
+
+                  <div className="text-[11px]" style={{ color: palette.subtext }}>
+                    {notificationPermission === 'granted' ? 'Browsernotiser är påslagna.' : 'Tillåt notiser för att få påminnelser.'}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={reloadFromBackend}
+                    className="rounded-xl border px-3 py-2 text-xs"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  >
+                    Ladda om från backend
+                  </button>
+                </div>
               </div>
 
               <div className="mb-5 space-y-3">
@@ -1080,13 +1231,28 @@ setShowModal(false);
                   return (
                     <div key={tab.id} className="rounded-2xl border p-3" style={{ borderColor: palette.border }}>
                       <div className="mb-3 flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ background: tab.color }}><Icon size={16} /></div>
-                        <input value={tab.label} onChange={(e) => renameTab(tab.id, e.target.value)} className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: palette.border }} />
-                        {!tab.locked && <button type="button" onClick={() => removeTab(tab.id)} className="rounded-xl p-2 text-red-700" style={{ background: '#fcebeb' }}><Trash2 size={16} /></button>}
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ background: tab.color }}>
+                          <Icon size={16} />
+                        </div>
+                        <input
+                          value={tab.label}
+                          onChange={(e) => renameTab(tab.id, e.target.value)}
+                          className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                          style={{ borderColor: palette.border }}
+                        />
+                        {!tab.locked && (
+                          <button type="button" onClick={() => removeTab(tab.id)} className="rounded-xl p-2 text-red-700" style={{ background: '#fcebeb' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
+
                       <div className="mb-3 flex flex-wrap gap-2">
-                        {tabColors.map((color) => <button key={color} type="button" onClick={() => recolorTab(tab.id, color)} className="h-7 w-7 rounded-full border-2" style={{ background: color, borderColor: tab.color === color ? palette.text : 'transparent' }} />)}
+                        {tabColors.map((color) => (
+                          <button key={color} type="button" onClick={() => recolorTab(tab.id, color)} className="h-7 w-7 rounded-full border-2" style={{ background: color, borderColor: tab.color === color ? palette.text : 'transparent' }} />
+                        ))}
                       </div>
+
                       <div className="rounded-xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <div className="text-sm font-medium">Delning</div>
@@ -1094,9 +1260,11 @@ setShowModal(false);
                             {tab.isShared ? 'Delad' : 'Privat'}
                           </button>
                         </div>
+
                         <div className="mb-2 text-xs" style={{ color: palette.subtext }}>
                           Ägare: {members.find((m) => m.id === tab.ownerId)?.name || 'Okänd'}
                         </div>
+
                         {tab.isShared ? (
                           <div className="flex flex-wrap gap-2">
                             {members.filter((member) => member.id !== tab.ownerId).map((member) => {
@@ -1128,10 +1296,15 @@ setShowModal(false);
               </div>
 
               <div className="mb-4 rounded-2xl border p-4" style={{ borderColor: palette.border, background: palette.page }}>
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Users size={16} /> Familjemedlemmar</div>
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                  <Users size={16} />
+                  Familjemedlemmar
+                </div>
+
                 <div className="mb-2 text-[11px]" style={{ color: palette.subtext }}>
                   Vald profil sparas bara på den här enheten. Ni behöver inte logga in.
                 </div>
+
                 <div className="mb-3 space-y-2">
                   {members.map((member) => (
                     <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2" style={{ borderColor: palette.border, background: palette.white }}>
@@ -1146,20 +1319,42 @@ setShowModal(false);
                         </button>
                         <input value={member.name} onChange={(e) => renameMember(member.id, e.target.value)} className="flex-1 bg-transparent text-sm outline-none" />
                       </div>
-                      {member.id !== 'm1' ? <button type="button" onClick={() => removeMember(member.id)} className="rounded-lg px-2 py-1 text-xs text-red-700" style={{ background: '#fcebeb' }}>Ta bort</button> : <div className="text-xs" style={{ color: '#999' }}>Standardprofil</div>}
+
+                      {member.id !== 'm1' ? (
+                        <button type="button" onClick={() => removeMember(member.id)} className="rounded-lg px-2 py-1 text-xs text-red-700" style={{ background: '#fcebeb' }}>
+                          Ta bort
+                        </button>
+                      ) : (
+                        <div className="text-xs" style={{ color: '#999' }}>Standardprofil</div>
+                      )}
                     </div>
                   ))}
                 </div>
+
                 <div className="flex gap-2">
-                  <input value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Namn på familjemedlem" className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: palette.border, background: palette.white }} />
-                  <button type="button" onClick={addMember} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>Lägg till</button>
+                  <input
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="Namn på familjemedlem"
+                    className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  />
+                  <button type="button" onClick={addMember} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>
+                    Lägg till
+                  </button>
                 </div>
               </div>
 
               <div className="mb-4 rounded-2xl border p-4" style={{ borderColor: palette.border, background: palette.page }}>
                 <div className="mb-3 text-sm font-semibold">Byt namn på hushållet</div>
                 <div className="flex gap-2">
-                  <input value={newFamilyName} onChange={(e) => setNewFamilyName(e.target.value)} placeholder="Till exempel Frykfamiljen" className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: palette.border, background: palette.white }} />
+                  <input
+                    value={newFamilyName}
+                    onChange={(e) => setNewFamilyName(e.target.value)}
+                    placeholder="Till exempel Frykfamiljen"
+                    className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  />
                   <button type="button" onClick={updateFamilyName} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>
                     Byt
                   </button>
@@ -1178,11 +1373,21 @@ setShowModal(false);
                   Fliken skapas för profilen: {getMemberName(members, activeMemberId)}
                 </div>
                 <div className="mb-3 flex gap-2">
-                  <input value={newTabName} onChange={(e) => setNewTabName(e.target.value)} placeholder="Namn på ny flik" className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: palette.border, background: palette.white }} />
-                  <button type="button" onClick={addTab} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>Lägg till</button>
+                  <input
+                    value={newTabName}
+                    onChange={(e) => setNewTabName(e.target.value)}
+                    placeholder="Namn på ny flik"
+                    className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: palette.border, background: palette.white }}
+                  />
+                  <button type="button" onClick={addTab} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>
+                    Lägg till
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {tabColors.map((color) => <button key={color} type="button" onClick={() => setNewTabColor(color)} className="h-7 w-7 rounded-full border-2" style={{ background: color, borderColor: newTabColor === color ? palette.text : 'transparent' }} />)}
+                  {tabColors.map((color) => (
+                    <button key={color} type="button" onClick={() => setNewTabColor(color)} className="h-7 w-7 rounded-full border-2" style={{ background: color, borderColor: newTabColor === color ? palette.text : 'transparent' }} />
+                  ))}
                 </div>
               </div>
             </div>
