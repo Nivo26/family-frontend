@@ -79,10 +79,10 @@ const initialTabs = [
 ];
 
 const initialTasks = [
-  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', note: 'Följ upp med kvitto.' },
-  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', note: 'Joh 15 och bön i slutet.' },
-  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', note: 'Mjölk, pasta och frukt.' },
-  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', note: '' },
+  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', note: 'Följ upp med kvitto.' },
+  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', note: 'Joh 15 och bön i slutet.' },
+  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', note: 'Mjölk, pasta och frukt.' },
+  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', note: '' },
 ];
 
 const initialPrayers = [
@@ -111,6 +111,11 @@ function formatShortDate(dateString) {
   if (!dateString) return '';
   const date = new Date(`${dateString}T12:00:00`);
   return date.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+}
+
+function formatTime(timeString) {
+  if (!timeString) return '';
+  return timeString.slice(0, 5);
 }
 
 function formatLongDate(dateString) {
@@ -211,9 +216,11 @@ export default function App() {
 
   const [showModal, setShowModal] = useState(false);
   const [newItem, setNewItem] = useState('');
+  const [newItemTime, setNewItemTime] = useState('');
   const [editTaskId, setEditTaskId] = useState(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
   const [editTaskDue, setEditTaskDue] = useState('');
+  const [editTaskTime, setEditTaskTime] = useState('');
   const [editTaskNote, setEditTaskNote] = useState('');
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -340,7 +347,14 @@ export default function App() {
   }, [tasks, safeCurrentTab]);
 
   const upcoming = useMemo(() => {
-    return tasks.filter((task) => task.due && task.status !== 'done').sort((a, b) => a.due.localeCompare(b.due)).slice(0, 5);
+    return tasks
+      .filter((task) => task.due && task.status !== 'done')
+      .sort((a, b) => {
+        const aDateTime = `${a.due}T${a.dueTime || '23:59'}`;
+        const bDateTime = `${b.due}T${b.dueTime || '23:59'}`;
+        return aDateTime.localeCompare(bDateTime);
+      })
+      .slice(0, 5);
   }, [tasks]);
 
   const stats = useMemo(() => {
@@ -353,7 +367,14 @@ export default function App() {
   }, [tasks, prayers]);
 
   const selectedDateTasks = useMemo(() => {
-    return tasks.filter((task) => task.area === safeCurrentTab && task.due === selectedDate).sort((a, b) => a.title.localeCompare(b.title, 'sv'));
+    return tasks
+      .filter((task) => task.area === safeCurrentTab && task.due === selectedDate)
+      .sort((a, b) => {
+        const aTime = a.dueTime || '23:59';
+        const bTime = b.dueTime || '23:59';
+        if (aTime !== bTime) return aTime.localeCompare(bTime);
+        return a.title.localeCompare(b.title, 'sv');
+      });
   }, [tasks, safeCurrentTab, selectedDate]);
 
   function addItem() {
@@ -362,9 +383,21 @@ export default function App() {
     if (safeCurrentTab === 'prayer') {
       setPrayers((prev) => [...prev, { id: 'p' + Date.now().toString(), title: trimmed, answered: false }]);
     } else {
-      setTasks((prev) => [...prev, { id: Date.now().toString(), title: trimmed, status: 'todo', area: safeCurrentTab, due: selectedDate || '2026-04-21', note: '' }]);
+      setTasks((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          title: trimmed,
+          status: 'todo',
+          area: safeCurrentTab,
+          due: selectedDate || '2026-04-21',
+          dueTime: newItemTime,
+          note: '',
+        },
+      ]);
     }
     setNewItem('');
+    setNewItemTime('');
     setShowModal(false);
   }
 
@@ -389,6 +422,7 @@ export default function App() {
     setEditTaskId(task.id);
     setEditTaskTitle(task.title);
     setEditTaskDue(task.due || '');
+    setEditTaskTime(task.dueTime || '');
     setEditTaskNote(task.note || '');
   }
 
@@ -396,13 +430,28 @@ export default function App() {
     setEditTaskId(null);
     setEditTaskTitle('');
     setEditTaskDue('');
+    setEditTaskTime('');
     setEditTaskNote('');
   }
 
   function saveEditedTask() {
     const trimmed = editTaskTitle.trim();
     if (!trimmed || !editTaskId) return;
-    setTasks((prev) => prev.map((task) => task.id === editTaskId ? { ...task, title: trimmed, due: editTaskDue, note: editTaskNote } : task));
+
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === editTaskId
+          ? {
+              ...task,
+              title: trimmed,
+              due: editTaskDue,
+              dueTime: editTaskTime,
+              note: editTaskNote,
+            }
+          : task
+      )
+    );
+
     closeEditTask();
   }
 
@@ -671,8 +720,17 @@ export default function App() {
                   <div className="mb-2 text-xs font-semibold" style={{ color: palette.subtext }}>{formatLongDate(selectedDate)}</div>
                   <div className="space-y-2">
                     {selectedDateTasks.length === 0 ? <div className="text-xs" style={{ color: '#bbb' }}>Inga uppgifter denna dag</div> : selectedDateTasks.map((task) => (
-                      <button key={task.id} type="button" onClick={() => openEditTask(task)} className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs" style={{ borderLeftColor: currentTabInfo.color, background: palette.page }}>
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => openEditTask(task)}
+                        className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs"
+                        style={{ borderLeftColor: currentTabInfo.color, background: palette.page }}
+                      >
                         <div className="text-[12px] text-neutral-800">{task.title}</div>
+                        {task.dueTime ? (
+                          <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div>
+                        ) : null}
                         {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
                       </button>
                     ))}
@@ -686,7 +744,10 @@ export default function App() {
                     const itemTab = tabs.find((t) => t.id === item.area);
                     return (
                       <button key={item.id} type="button" className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs transition hover:opacity-90" style={{ borderLeftColor: itemTab?.color || palette.biz, background: palette.page }} onClick={() => { setCurrentTab(item.area); setSelectedDate(item.due); }}>
-                        <div className="mb-0.5 text-[10px]" style={{ color: '#aaa' }}>{formatShortDate(item.due)}</div>
+                        <div className="mb-0.5 text-[10px]" style={{ color: '#aaa' }}>
+                          {formatShortDate(item.due)}
+                          {item.dueTime ? ` kl ${formatTime(item.dueTime)}` : ''}
+                        </div>
                         <div className="text-[12px] text-neutral-800">{item.title}</div>
                       </button>
                     );
@@ -768,7 +829,10 @@ export default function App() {
                                     <span className="rounded-full px-2 py-[3px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, currentTabInfo.ownerId)}</span>
                                     {currentTabInfo.isShared ? <span className="rounded-full px-2 py-[3px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
                                   </div>
-                                  <span style={{ color: '#aaa' }}>{formatShortDate(task.due)}</span>
+                                  <span style={{ color: '#aaa' }}>
+                                    {formatShortDate(task.due)}
+                                    {task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}
+                                  </span>
                                 </div>
                                 {task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
                               </button>
@@ -805,6 +869,15 @@ export default function App() {
               <div className="mb-3 text-sm text-neutral-500">{safeCurrentTab === 'prayer' ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${currentTabInfo.label}`}</div>
               <div className="mb-3 text-[11px] text-neutral-400">Sparas till backend i hushållet. Profilvalet minns den här enheten lokalt.</div>
               <input value={newItem} onChange={(e) => setNewItem(e.target.value)} placeholder={safeCurrentTab === 'prayer' ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'} className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
+              {safeCurrentTab !== 'prayer' && (
+                <input
+                  type="time"
+                  value={newItemTime}
+                  onChange={(e) => setNewItemTime(e.target.value)}
+                  className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                  style={{ borderColor: palette.border }}
+                />
+              )}
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>Avbryt</button>
                 <button type="button" onClick={addItem} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>Spara</button>
@@ -823,6 +896,13 @@ export default function App() {
               <div className="mb-3 text-sm text-neutral-500">Uppgiften ligger i fliken: {currentTabInfo.label}</div>
               <input value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} placeholder="Uppgiftens namn" className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
               <input type="date" value={editTaskDue} onChange={(e) => setEditTaskDue(e.target.value)} className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
+              <input
+                type="time"
+                value={editTaskTime}
+                onChange={(e) => setEditTaskTime(e.target.value)}
+                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border }}
+              />
               <textarea value={editTaskNote} onChange={(e) => setEditTaskNote(e.target.value)} placeholder="Notering" className="mb-4 min-h-[100px] w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
               <div className="flex justify-between gap-2">
                 <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-2 text-sm text-red-700" style={{ background: '#fcebeb' }}>Ta bort</button>
