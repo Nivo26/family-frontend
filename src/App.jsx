@@ -13,6 +13,8 @@ import {
   Trash2,
   Users,
   Copy,
+  Calendar,
+  Layers3,
 } from 'lucide-react';
 
 const API_URL = 'https://family-backend-w852.onrender.com/api/planner';
@@ -191,7 +193,7 @@ function SmallCalendar({ tasks, selectedDate, onSelectDate }) {
               key={`${cell.day}-${index}`}
               type="button"
               onClick={() => cell.currentMonth && onSelectDate(cellDate)}
-              className="relative mx-auto flex h-7 w-7 items-center justify-center rounded-full transition hover:bg-stone-100"
+              className="relative mx-auto flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-stone-100"
               style={{
                 background: isSelected ? '#dfe9f7' : isToday ? palette.text : 'transparent',
                 color: isToday ? '#fff' : cell.currentMonth ? '#666' : '#c8c8c2',
@@ -230,6 +232,8 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState('2026-04-14');
   const [activeMemberId, setActiveMemberId] = useState('m1');
   const [mobileColumn, setMobileColumn] = useState('todo');
+  const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showMobileCalendar, setShowMobileCalendar] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
   const [newItem, setNewItem] = useState('');
@@ -395,20 +399,23 @@ export default function App() {
   );
   const safeCurrentTab = visibleTabs.find((tab) => tab.id === currentTab)?.id || visibleTabs[0]?.id || 'biz';
   const currentTabInfo = tabs.find((tab) => tab.id === safeCurrentTab) || tabs[0];
-  const currentTasks = tasks.filter((task) => task.area === safeCurrentTab);
+  const isPrayerView = safeCurrentTab === 'prayer' && !showAllTasks;
+  const taskScope = showAllTasks
+    ? tasks.filter((task) => task.area !== 'prayer')
+    : tasks.filter((task) => task.area === safeCurrentTab);
+  const calendarTasks = showAllTasks ? tasks.filter((task) => task.area !== 'prayer') : taskScope;
 
   const grouped = useMemo(() => {
-    const scoped = tasks.filter((t) => t.area === safeCurrentTab);
     return {
-      todo: scoped.filter((t) => t.status === 'todo'),
-      doing: scoped.filter((t) => t.status === 'doing'),
-      done: scoped.filter((t) => t.status === 'done'),
+      todo: taskScope.filter((t) => t.status === 'todo'),
+      doing: taskScope.filter((t) => t.status === 'doing'),
+      done: taskScope.filter((t) => t.status === 'done'),
     };
-  }, [tasks, safeCurrentTab]);
+  }, [taskScope]);
 
   const upcoming = useMemo(() => {
     return tasks
-      .filter((task) => task.due && task.status !== 'done')
+      .filter((task) => task.due && task.status !== 'done' && task.area !== 'prayer')
       .sort((a, b) => {
         const aDateTime = `${a.due}T${a.dueTime || '23:59'}`;
         const bDateTime = `${b.due}T${b.dueTime || '23:59'}`;
@@ -419,27 +426,27 @@ export default function App() {
 
   const stats = useMemo(() => {
     return {
-      todo: tasks.filter((t) => t.status === 'todo').length,
-      doing: tasks.filter((t) => t.status === 'doing').length,
-      done: tasks.filter((t) => t.status === 'done').length,
+      todo: tasks.filter((t) => t.status === 'todo' && t.area !== 'prayer').length,
+      doing: tasks.filter((t) => t.status === 'doing' && t.area !== 'prayer').length,
+      done: tasks.filter((t) => t.status === 'done' && t.area !== 'prayer').length,
       prayers: prayers.filter((p) => !p.answered).length,
     };
   }, [tasks, prayers]);
 
   const selectedDateTasks = useMemo(() => {
-    return tasks
-      .filter((task) => task.area === safeCurrentTab && task.due === selectedDate)
+    return taskScope
+      .filter((task) => task.due === selectedDate)
       .sort((a, b) => {
         const aTime = a.dueTime || '23:59';
         const bTime = b.dueTime || '23:59';
         if (aTime !== bTime) return aTime.localeCompare(bTime);
         return a.title.localeCompare(b.title, 'sv');
       });
-  }, [tasks, safeCurrentTab, selectedDate]);
+  }, [taskScope, selectedDate]);
 
   useEffect(() => {
     setMobileColumn('todo');
-  }, [safeCurrentTab]);
+  }, [safeCurrentTab, showAllTasks]);
 
   async function enableNotifications() {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -484,16 +491,17 @@ export default function App() {
     const trimmed = newItem.trim();
     if (!trimmed) return;
 
-    if (safeCurrentTab === 'prayer') {
+    if (safeCurrentTab === 'prayer' && !showAllTasks) {
       setPrayers((prev) => [...prev, { id: `p${Date.now()}`, title: trimmed, answered: false }]);
     } else {
+      const targetArea = showAllTasks ? safeCurrentTab : safeCurrentTab;
       setTasks((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           title: trimmed,
           status: 'todo',
-          area: safeCurrentTab,
+          area: targetArea,
           due: selectedDate || '2026-04-21',
           dueTime: newItemTime,
           reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
@@ -681,6 +689,12 @@ export default function App() {
   }
 
   function renderTaskCard(task, key) {
+    const taskTab = tabs.find((tab) => tab.id === task.area);
+    const pillLabel = showAllTasks ? taskTab?.label || 'Flik' : currentTabInfo.label;
+    const pillColor = showAllTasks ? taskTab?.color || palette.biz : currentTabInfo.color;
+    const ownerId = taskTab?.ownerId || currentTabInfo.ownerId;
+    const isShared = showAllTasks ? taskTab?.isShared : currentTabInfo.isShared;
+
     return (
       <div
         key={task.id}
@@ -693,7 +707,7 @@ export default function App() {
         className="group rounded-2xl bg-white px-3.5 py-3.5 shadow-sm transition hover:shadow-md"
         style={{
           border: `1px solid ${palette.border}`,
-          borderLeft: key === 'doing' ? `3px solid ${currentTabInfo.color}` : `1px solid ${palette.border}`,
+          borderLeft: key === 'doing' ? `3px solid ${pillColor}` : `1px solid ${palette.border}`,
           borderRadius: key === 'doing' ? '0 16px 16px 0' : '16px',
           opacity: draggingTaskId === task.id ? 0.5 : key === 'done' ? 0.6 : 1,
           cursor: 'grab',
@@ -733,9 +747,9 @@ export default function App() {
         <button type="button" onClick={() => openEditTask(task)} className="mb-2 w-full text-left">
           <div className="flex items-center justify-between text-[11px] gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="rounded-full px-2 py-[4px]" style={{ background: palette.soft, color: '#666' }}>{currentTabInfo.label}</span>
-              <span className="rounded-full px-2 py-[4px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, currentTabInfo.ownerId)}</span>
-              {currentTabInfo.isShared ? <span className="rounded-full px-2 py-[4px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
+              <span className="rounded-full px-2 py-[4px]" style={{ background: palette.soft, color: '#666' }}>{pillLabel}</span>
+              <span className="rounded-full px-2 py-[4px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, ownerId)}</span>
+              {isShared ? <span className="rounded-full px-2 py-[4px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
             </div>
             <span style={{ color: '#aaa' }}>
               {formatShortDate(task.due)}
@@ -801,16 +815,33 @@ export default function App() {
         </header>
 
         <div className="flex gap-2 overflow-x-auto border-b px-4 py-2 md:px-4" style={{ background: palette.white, borderColor: palette.border }}>
+          <button
+            type="button"
+            onClick={() => setShowAllTasks((prev) => !prev)}
+            className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm whitespace-nowrap"
+            style={{
+              background: showAllTasks ? palette.text : palette.white,
+              color: showAllTasks ? '#fff' : palette.text,
+              borderColor: showAllTasks ? palette.text : palette.border,
+            }}
+          >
+            <Layers3 size={16} />
+            Alla
+          </button>
+
           {visibleTabs.map((tab) => {
             const Icon = getTabIcon(tab.icon);
-            const active = safeCurrentTab === tab.id;
+            const active = safeCurrentTab === tab.id && !showAllTasks;
             const sharedCount = (tab.sharedWith || []).length;
 
             return (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setCurrentTab(tab.id)}
+                onClick={() => {
+                  setShowAllTasks(false);
+                  setCurrentTab(tab.id);
+                }}
                 className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition whitespace-nowrap"
                 style={{
                   background: active ? tab.color : palette.white,
@@ -831,8 +862,30 @@ export default function App() {
         </div>
 
         <div className="md:hidden border-b px-4 py-3" style={{ background: palette.white, borderColor: palette.border }}>
-          {safeCurrentTab !== 'prayer' ? (
+          {!isPrayerView ? (
             <>
+              <button
+                type="button"
+                onClick={() => setShowMobileCalendar((prev) => !prev)}
+                className="mb-3 flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left"
+                style={{ borderColor: palette.border, background: palette.page }}
+              >
+                <div className="flex items-center gap-2">
+                  <Calendar size={16} />
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Månadsvy</div>
+                    <div className="text-sm font-medium">{formatLongDate(selectedDate)}</div>
+                  </div>
+                </div>
+                <div className="text-xs" style={{ color: palette.subtext }}>{showMobileCalendar ? 'Dölj' : 'Visa'}</div>
+              </button>
+
+              {showMobileCalendar && (
+                <div className="mb-3 rounded-2xl border p-3.5" style={{ borderColor: palette.border, background: palette.white }}>
+                  <SmallCalendar tasks={calendarTasks} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-2xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
                   <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Vald dag</div>
@@ -841,9 +894,9 @@ export default function App() {
                 </div>
 
                 <div className="rounded-2xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
-                  <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Översikt</div>
-                  <div className="mt-1 text-sm font-medium">{grouped[mobileColumn].length} i {columnLabels[mobileColumn].toLowerCase()}</div>
-                  <div className="mt-1 text-xs" style={{ color: palette.subtext }}>{stats.todo + stats.doing} aktiva totalt</div>
+                  <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Vy</div>
+                  <div className="mt-1 text-sm font-medium">{showAllTasks ? 'Alla uppgifter' : currentTabInfo.label}</div>
+                  <div className="mt-1 text-xs" style={{ color: palette.subtext }}>{grouped.todo.length + grouped.doing.length + grouped.done.length} totalt</div>
                 </div>
               </div>
 
@@ -858,9 +911,9 @@ export default function App() {
                         onClick={() => setMobileColumn(key)}
                         className="rounded-full border px-3 py-2 text-sm whitespace-nowrap"
                         style={{
-                          background: active ? currentTabInfo.color : palette.white,
+                          background: active ? (showAllTasks ? palette.text : currentTabInfo.color) : palette.white,
                           color: active ? '#fff' : palette.text,
-                          borderColor: active ? currentTabInfo.color : palette.border,
+                          borderColor: active ? (showAllTasks ? palette.text : currentTabInfo.color) : palette.border,
                         }}
                       >
                         {label} · {grouped[key].length}
@@ -878,20 +931,23 @@ export default function App() {
                       Inga uppgifter denna dag
                     </div>
                   ) : (
-                    selectedDateTasks.slice(0, 3).map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => openEditTask(task)}
-                        className="block w-full rounded-2xl border p-3 text-left"
-                        style={{ borderColor: palette.border, background: palette.page }}
-                      >
-                        <div className="text-sm font-medium">{task.title}</div>
-                        <div className="mt-1 text-xs" style={{ color: palette.subtext }}>
-                          {task.dueTime ? `Kl. ${formatTime(task.dueTime)}` : 'Ingen tid'}
-                        </div>
-                      </button>
-                    ))
+                    selectedDateTasks.slice(0, 4).map((task) => {
+                      const taskTab = tabs.find((tab) => tab.id === task.area);
+                      return (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => openEditTask(task)}
+                          className="block w-full rounded-2xl border p-3 text-left"
+                          style={{ borderColor: palette.border, background: palette.page }}
+                        >
+                          <div className="text-sm font-medium">{task.title}</div>
+                          <div className="mt-1 text-xs" style={{ color: palette.subtext }}>
+                            {(taskTab?.label || 'Flik')} · {task.dueTime ? `Kl. ${formatTime(task.dueTime)}` : 'Ingen tid'}
+                          </div>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -915,14 +971,14 @@ export default function App() {
                 style={{ background: palette.text }}
               >
                 <Plus size={16} />
-                {safeCurrentTab === 'prayer' ? 'Nytt böneämne' : 'Ny uppgift'}
+                {isPrayerView ? 'Nytt böneämne' : 'Ny uppgift'}
               </button>
             </div>
 
             <div className="flex flex-1 flex-col gap-5 p-4">
               <SidebarSection title="Kalender">
                 <div className="rounded-2xl border p-3.5" style={{ background: palette.white, borderColor: palette.border }}>
-                  <SmallCalendar tasks={safeCurrentTab === 'prayer' ? [] : currentTasks} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+                  <SmallCalendar tasks={calendarTasks} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
                 </div>
               </SidebarSection>
 
@@ -933,19 +989,23 @@ export default function App() {
                     {selectedDateTasks.length === 0 ? (
                       <div className="text-xs" style={{ color: '#bbb' }}>Inga uppgifter denna dag</div>
                     ) : (
-                      selectedDateTasks.map((task) => (
-                        <button
-                          key={task.id}
-                          type="button"
-                          onClick={() => openEditTask(task)}
-                          className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs"
-                          style={{ borderLeftColor: currentTabInfo.color, background: palette.page }}
-                        >
-                          <div className="text-[12px] text-neutral-800">{task.title}</div>
-                          {task.dueTime ? <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div> : null}
-                          {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
-                        </button>
-                      ))
+                      selectedDateTasks.map((task) => {
+                        const taskTab = tabs.find((tab) => tab.id === task.area);
+                        return (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => openEditTask(task)}
+                            className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs"
+                            style={{ borderLeftColor: taskTab?.color || currentTabInfo.color, background: palette.page }}
+                          >
+                            <div className="text-[12px] text-neutral-800">{task.title}</div>
+                            <div className="mt-1 text-[10px] text-neutral-500">{taskTab?.label || currentTabInfo.label}</div>
+                            {task.dueTime ? <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div> : null}
+                            {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -967,6 +1027,7 @@ export default function App() {
                           className="block w-full rounded-r-md border-l-2 px-3 py-2 text-left text-xs transition hover:opacity-90"
                           style={{ borderLeftColor: itemTab?.color || palette.biz, background: palette.page }}
                           onClick={() => {
+                            setShowAllTasks(false);
                             setCurrentTab(item.area);
                             setSelectedDate(item.due);
                           }}
@@ -976,6 +1037,7 @@ export default function App() {
                             {item.dueTime ? ` kl ${formatTime(item.dueTime)}` : ''}
                           </div>
                           <div className="text-[12px] text-neutral-800">{item.title}</div>
+                          <div className="mt-0.5 text-[10px]" style={{ color: '#999' }}>{itemTab?.label || 'Flik'}</div>
                         </button>
                       );
                     })
@@ -1001,7 +1063,7 @@ export default function App() {
             </div>
           </aside>
 
-          {safeCurrentTab === 'prayer' ? (
+          {isPrayerView ? (
             <main className="p-4 md:p-6">
               <div className="rounded-3xl border p-4 md:p-5" style={{ background: palette.white, borderColor: palette.border }}>
                 <div className="mb-4 flex items-center justify-between">
@@ -1034,7 +1096,7 @@ export default function App() {
             <main className="p-4 md:p-4">
               <div className="hidden md:grid gap-3 md:grid-cols-3 md:items-start">
                 {Object.entries(columnLabels).map(([key, label]) => {
-                  const dotColor = key === 'todo' ? '#cfcfc8' : currentTabInfo.color;
+                  const dotColor = key === 'todo' ? '#cfcfc8' : showAllTasks ? palette.text : currentTabInfo.color;
                   const isDragOver = dragOverStatus === key;
 
                   return (
@@ -1081,7 +1143,7 @@ export default function App() {
                 <section className="min-w-0">
                   <div className="mb-2 flex items-center justify-between px-1 py-1">
                     <div className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: palette.subtext }}>
-                      <span className="inline-block h-2 w-2 rounded-full" style={{ background: mobileColumn === 'todo' ? '#cfcfc8' : currentTabInfo.color }} />
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ background: mobileColumn === 'todo' ? '#cfcfc8' : showAllTasks ? palette.text : currentTabInfo.color }} />
                       {columnLabels[mobileColumn]}
                     </div>
                     <span className="rounded-full px-2 py-[2px] text-[11px]" style={{ background: '#e8e8e3', color: '#999' }}>{grouped[mobileColumn].length}</span>
@@ -1127,14 +1189,14 @@ export default function App() {
             <div className="w-full max-w-md rounded-t-[28px] md:rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
               <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">{safeCurrentTab === 'prayer' ? 'Nytt böneämne' : 'Ny uppgift'}</h3>
+                <h3 className="text-lg font-semibold">{isPrayerView ? 'Nytt böneämne' : 'Ny uppgift'}</h3>
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-full p-2" style={{ background: palette.soft }}>
                   <X size={16} />
                 </button>
               </div>
 
               <div className="mb-3 text-sm text-neutral-500">
-                {safeCurrentTab === 'prayer' ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${currentTabInfo.label}`}
+                {isPrayerView ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${showAllTasks ? currentTabInfo.label : currentTabInfo.label}`}
               </div>
 
               <div className="mb-3 text-[11px] text-neutral-400">Sparas till backend i hushållet. Profilvalet minns den här enheten lokalt.</div>
@@ -1142,12 +1204,12 @@ export default function App() {
               <input
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
-                placeholder={safeCurrentTab === 'prayer' ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
+                placeholder={isPrayerView ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
                 className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
-              {safeCurrentTab !== 'prayer' && (
+              {!isPrayerView && (
                 <>
                   <input
                     type="time"
@@ -1180,7 +1242,7 @@ export default function App() {
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                   Avbryt
                 </button>
-                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: currentTabInfo.color }}>
+                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: isPrayerView ? palette.pastor : (showAllTasks ? currentTabInfo.color : currentTabInfo.color) }}>
                   Spara
                 </button>
               </div>
@@ -1199,7 +1261,7 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="mb-3 text-sm text-neutral-500">Uppgiften ligger i fliken: {currentTabInfo.label}</div>
+              <div className="mb-3 text-sm text-neutral-500">Redigera detaljer och påminnelse</div>
 
               <input
                 value={editTaskTitle}
