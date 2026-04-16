@@ -12,6 +12,8 @@ import {
   Settings,
   Trash2,
   Users,
+  Link as LinkIcon,
+  Copy,
 } from 'lucide-react';
 
 const API_URL = 'https://family-backend-w852.onrender.com/api/planner';
@@ -43,12 +45,12 @@ function getMemberBadge(memberName) {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
-function buildIcsUrl(familyId) {
-  return `${API_BASE_URL}/api/planner.ics?family_id=${encodeURIComponent(familyId)}`;
-}
-
 function getMemberName(members, memberId) {
   return members.find((member) => member.id === memberId)?.name || 'Okänd';
+}
+
+function buildIcsUrl(familyId) {
+  return `${API_BASE_URL}/api/planner.ics?family_id=${encodeURIComponent(familyId)}`;
 }
 
 const palette = {
@@ -197,6 +199,7 @@ function SidebarSection({ title, children }) {
 export default function App() {
   const [familyId, setFamilyId] = useState(getInitialFamilyId());
   const apiUrlWithFamily = `${API_URL}?family_id=${encodeURIComponent(familyId)}`;
+  const calendarUrl = buildIcsUrl(familyId);
 
   const [members, setMembers] = useState(initialMembers);
   const [tabs, setTabs] = useState(initialTabs);
@@ -215,6 +218,7 @@ export default function App() {
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showCalendarInfo, setShowCalendarInfo] = useState(false);
   const [newTabName, setNewTabName] = useState('');
   const [newTabColor, setNewTabColor] = useState(tabColors[0]);
   const [newMemberName, setNewMemberName] = useState('');
@@ -251,7 +255,7 @@ export default function App() {
   useEffect(() => {
     async function fetchPlanner() {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
         const response = await fetch(apiUrlWithFamily, {
@@ -283,7 +287,7 @@ export default function App() {
     }
 
     fetchPlanner();
-  }, [familyId]);
+  }, [familyId, apiUrlWithFamily]);
 
   useEffect(() => {
     if (!hasLoadedFromBackend) return;
@@ -443,7 +447,7 @@ export default function App() {
   }
 
   function removeTab(tabId) {
-    const firstTabId = tabs.find((tab) => !tab.locked && tab.id !== tabId)?.id || 'biz';
+    const firstTabId = tabs.find((tab) => !tab.locked && tab.id !== tabId)?.id || visibleTabs[0]?.id || 'biz';
     setTasks((prev) => prev.filter((task) => task.area !== tabId));
     setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
     if (currentTab === tabId) setCurrentTab(firstTabId);
@@ -492,6 +496,17 @@ export default function App() {
     setNewFamilyName('');
   }
 
+  async function copyCalendarUrl() {
+    try {
+      await navigator.clipboard.writeText(calendarUrl);
+      setBackendStatus('Kalenderlänk kopierad');
+      setTimeout(() => setBackendStatus(`Synkad med backend · ${familyId}`), 1800);
+    } catch (error) {
+      console.error('Kunde inte kopiera kalenderlänk:', error);
+      setBackendStatus('Kunde inte kopiera kalenderlänk');
+    }
+  }
+
   return (
     <div className="min-h-screen" style={{ background: palette.bg, color: palette.text }}>
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col" style={{ background: palette.page, boxShadow: '0 0 0 1px #e0e0db' }}>
@@ -502,7 +517,7 @@ export default function App() {
             <div className="mt-1 text-[11px]" style={{ color: palette.subtext }}>Hushåll: {getDisplayFamilyName(familyId)}</div>
             <div className="mt-1 text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : '#888' }}>{backendStatus}</div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             <div className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: palette.border, background: palette.white, color: palette.subtext }}>
               Hushåll: {getDisplayFamilyName(familyId)}
             </div>
@@ -516,7 +531,7 @@ export default function App() {
                 onChange={(e) => {
                   const id = e.target.value;
                   setActiveMemberId(id);
-                  const first = tabs.find((t) => t.ownerId === id || (t.isShared && (t.sharedWith || []).includes(id)) || id === 'm1');
+                  const first = tabs.find((t) => t.ownerId === id || (t.isShared && (t.sharedWith || []).includes(id)));
                   if (first) setCurrentTab(first.id);
                 }}
                 className="text-xs outline-none"
@@ -527,13 +542,12 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                window.open(buildIcsUrl(familyId), '_blank');
-              }}
-              className="rounded-xl border px-3 py-2 text-xs"
+              onClick={() => setShowCalendarInfo((prev) => !prev)}
+              className="rounded-xl border px-3 py-2 text-xs flex items-center gap-2"
               style={{ borderColor: palette.border, background: palette.white }}
             >
-              ICS-export
+              <LinkIcon size={14} />
+              Kalender
             </button>
             <button
               type="button"
@@ -565,6 +579,39 @@ export default function App() {
           </div>
         </header>
 
+        {showCalendarInfo && (
+          <div className="border-b px-4 py-3 md:px-6" style={{ background: '#fafaf7', borderColor: palette.border }}>
+            <div className="mb-2 text-sm font-semibold">Kalenderlänk för prenumeration</div>
+            <div className="mb-3 text-xs" style={{ color: palette.subtext }}>
+              Använd den här länken i Apple Kalender eller annan kalenderapp som stöder abonnerade kalendrar.
+            </div>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <input
+                value={calendarUrl}
+                readOnly
+                className="flex-1 rounded-xl border px-3 py-2 text-xs outline-none"
+                style={{ borderColor: palette.border, background: palette.white }}
+              />
+              <button
+                type="button"
+                onClick={copyCalendarUrl}
+                className="rounded-xl border px-3 py-2 text-xs flex items-center justify-center gap-2"
+                style={{ borderColor: palette.border, background: palette.white }}
+              >
+                <Copy size={14} />
+                Kopiera kalenderlänk
+              </button>
+              <a
+                href={calendarUrl.replace('https://', 'webcal://')}
+                className="rounded-xl border px-3 py-2 text-xs text-center"
+                style={{ borderColor: palette.border, background: palette.white }}
+              >
+                Öppna i kalender
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2 overflow-x-auto border-b px-4 py-2" style={{ background: palette.white, borderColor: palette.border }}>
           {visibleTabs.map((tab) => {
             const Icon = getTabIcon(tab.icon);
@@ -572,7 +619,7 @@ export default function App() {
             const ownerName = getMemberName(members, tab.ownerId);
             const sharedCount = (tab.sharedWith || []).length;
             return (
-              <button key={tab.id} type="button" onClick={() => setCurrentTab(tab.id)} className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition" style={{ background: active ? tab.color : palette.white, color: active ? '#ffffff' : palette.text, borderColor: active ? tab.color : palette.border }}>
+              <button key={tab.id} type="button" onClick={() => setCurrentTab(tab.id)} className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition whitespace-nowrap" style={{ background: active ? tab.color : palette.white, color: active ? '#ffffff' : palette.text, borderColor: active ? tab.color : palette.border }}>
                 <Icon size={16} />
                 <span>{tab.label}</span>
                 {!active && (
@@ -903,9 +950,6 @@ export default function App() {
                 <div className="mb-3 flex gap-2">
                   <input value={newTabName} onChange={(e) => setNewTabName(e.target.value)} placeholder="Namn på ny flik" className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: palette.border, background: palette.white }} />
                   <button type="button" onClick={addTab} className="rounded-xl px-4 py-2 text-sm text-white" style={{ background: palette.text }}>Lägg till</button>
-                </div>
-                <div className="mb-2 text-[11px]" style={{ color: palette.subtext }}>
-                  Ny flik skapas för den profil som är vald just nu.
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {tabColors.map((color) => <button key={color} type="button" onClick={() => setNewTabColor(color)} className="h-7 w-7 rounded-full border-2" style={{ background: color, borderColor: newTabColor === color ? palette.text : 'transparent' }} />)}
