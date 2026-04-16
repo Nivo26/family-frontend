@@ -236,17 +236,18 @@ export default function App() {
   const [showMobileCalendar, setShowMobileCalendar] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
-  const [newItem, setNewItem] = useState('');
-  const [newItemArea, setNewItemArea] = useState('');
-  const [newItemTime, setNewItemTime] = useState('');
-  const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
-  const [editTaskId, setEditTaskId] = useState(null);
-  const [editTaskTitle, setEditTaskTitle] = useState('');
-  const [editTaskArea, setEditTaskArea] = useState('');
-  const [editTaskDue, setEditTaskDue] = useState('');
-  const [editTaskTime, setEditTaskTime] = useState('');
-  const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
-  const [editTaskNote, setEditTaskNote] = useState('');
+const [newItem, setNewItem] = useState('');
+const [newItemArea, setNewItemArea] = useState('');
+const [newItemTime, setNewItemTime] = useState('');
+const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
+const [editTaskId, setEditTaskId] = useState(null);
+const [editTaskTitle, setEditTaskTitle] = useState('');
+const [editTaskArea, setEditTaskArea] = useState('');
+const [editTaskDue, setEditTaskDue] = useState('');
+const [editTaskTime, setEditTaskTime] = useState('');
+const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
+const [editTaskNote, setEditTaskNote] = useState('');
+
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -392,19 +393,22 @@ export default function App() {
 
     checkReminders();
     const intervalId = setInterval(checkReminders, 60000);
-
     return () => clearInterval(intervalId);
   }, [tasks, familyId, notificationPermission]);
 
   const visibleTabs = tabs.filter(
     (tab) => tab.ownerId === activeMemberId || (tab.isShared && (tab.sharedWith || []).includes(activeMemberId))
   );
+
+  const taskTabs = visibleTabs.filter((tab) => tab.id !== 'prayer');
   const safeCurrentTab = visibleTabs.find((tab) => tab.id === currentTab)?.id || visibleTabs[0]?.id || 'biz';
   const currentTabInfo = tabs.find((tab) => tab.id === safeCurrentTab) || tabs[0];
   const isPrayerView = safeCurrentTab === 'prayer' && !showAllTasks;
+
   const taskScope = showAllTasks
     ? tasks.filter((task) => task.area !== 'prayer')
     : tasks.filter((task) => task.area === safeCurrentTab);
+
   const calendarTasks = showAllTasks ? tasks.filter((task) => task.area !== 'prayer') : taskScope;
 
   const grouped = useMemo(() => {
@@ -450,6 +454,21 @@ export default function App() {
     setMobileColumn('todo');
   }, [safeCurrentTab, showAllTasks]);
 
+  function openCreateModal() {
+    const defaultArea = showAllTasks
+      ? taskTabs[0]?.id || 'biz'
+      : safeCurrentTab === 'prayer'
+        ? taskTabs[0]?.id || 'biz'
+        : safeCurrentTab;
+
+    setNewItem('');
+    setNewItemTime('');
+    setNewItemReminderMinutes('');
+    setNewItemArea(defaultArea);
+    setNewItemArea(safeCurrentTab === 'prayer' ? 'family' : safeCurrentTab);
+setShowModal(true);
+  }
+
   async function enableNotifications() {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setBackendStatus('Den här enheten stöder inte notiser');
@@ -489,35 +508,36 @@ export default function App() {
     }
   }
 
-  function addItem() {
-    const trimmed = newItem.trim();
-    if (!trimmed) return;
+function addItem() {
+  const trimmed = newItem.trim();
+  if (!trimmed) return;
 
-    if (safeCurrentTab === 'prayer' && !showAllTasks) {
-      setPrayers((prev) => [...prev, { id: `p${Date.now()}`, title: trimmed, answered: false }]);
-    } else {
-      const targetArea = newItemArea || safeCurrentTab;
-setTasks((prev) => [
-  ...prev,
-  {
-    id: Date.now().toString(),
-    title: trimmed,
-    status: 'todo',
-    area: targetArea,
-          due: selectedDate || '2026-04-21',
-          dueTime: newItemTime,
-          reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
-          note: '',
-        },
-      ]);
-    }
+  if (safeCurrentTab === 'prayer' && !showAllTasks) {
+    setPrayers((prev) => [...prev, { id: `p${Date.now()}`, title: trimmed, answered: false }]);
+  } else {
+    const targetArea = newItemArea || safeCurrentTab;
 
-    setNewItem('');
-setNewItemTime('');
-setNewItemReminderMinutes('');
-setNewItemArea('');
-setShowModal(false);
+    setTasks((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        title: trimmed,
+        status: 'todo',
+        area: targetArea,
+        due: selectedDate || '2026-04-21',
+        dueTime: newItemTime,
+        reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
+        note: '',
+      },
+    ]);
   }
+
+  setNewItem('');
+  setNewItemArea('');
+  setNewItemTime('');
+  setNewItemReminderMinutes('');
+  setShowModal(false);
+}
 
   function moveTask(taskId, nextStatus) {
     setTasks((prev) => prev.map((task) => (task.id === taskId ? { ...task, status: nextStatus } : task)));
@@ -536,57 +556,52 @@ setShowModal(false);
     setPrayers((prev) => prev.filter((prayer) => prayer.id !== prayerId));
   }
 
-  function openEditTask(task) {
-    setEditTaskId(task.id);
-    setEditTaskTitle(task.title);
-    setEditTaskArea(task.area || '');
-    setEditTaskDue(task.due || '');
-    setEditTaskTime(task.dueTime || '');
-    setEditTaskReminderMinutes(
-      task.reminderMinutes === '' || task.reminderMinutes === null || task.reminderMinutes === undefined
-        ? ''
-        : String(task.reminderMinutes)
-    );
-    setEditTaskNote(task.note || '');
-  }
 
-  function closeEditTask() {
-    setEditTaskId(null);
-    setEditTaskTitle('');
-    setEditTaskArea('');
-    setEditTaskDue('');
-    setEditTaskTime('');
-    setEditTaskReminderMinutes('');
-    setEditTaskNote('');
-  }
 
+ function openEditTask(task) {
+  setEditTaskId(task.id);
+  setEditTaskTitle(task.title);
+  setEditTaskArea(task.area || '');
+  setEditTaskDue(task.due || '');
+  setEditTaskTime(task.dueTime || '');
+  setEditTaskReminderMinutes(
+    task.reminderMinutes === '' || task.reminderMinutes === null || task.reminderMinutes === undefined
+      ? ''
+      : String(task.reminderMinutes)
+  );
+  setEditTaskNote(task.note || '');
+}
+function closeEditTask() {
+  setEditTaskId(null);
+  setEditTaskTitle('');
+  setEditTaskArea('');
+  setEditTaskDue('');
+  setEditTaskTime('');
+  setEditTaskReminderMinutes('');
+  setEditTaskNote('');
+}
   function saveEditedTask() {
-    const trimmed = editTaskTitle.trim();
-    if (!trimmed || !editTaskId) return;
+  const trimmed = editTaskTitle.trim();
+  if (!trimmed || !editTaskId) return;
 
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === editTaskId
-          ? {
-              ...task,
-              title: trimmed,
-              due: editTaskDue,
-              dueTime: editTaskTime,
-              reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
-              note: editTaskNote,
-        title: trimmed,
-  area: editTaskArea || task.area,
-  due: editTaskDue,
-  dueTime: editTaskTime,
-  reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
-  note: editTaskNote,
-  }
-          : task
-      )
-    );
+  setTasks((prev) =>
+    prev.map((task) =>
+      task.id === editTaskId
+        ? {
+            ...task,
+            title: trimmed,
+            area: editTaskArea || task.area,
+            due: editTaskDue,
+            dueTime: editTaskTime,
+            reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
+            note: editTaskNote,
+          }
+        : task
+    )
+  );
 
-    closeEditTask();
-  }
+  closeEditTask();
+}
 
   function handleDragStart(taskId) {
     setDraggingTaskId(taskId);
@@ -756,8 +771,8 @@ setShowModal(false);
         </div>
 
         <button type="button" onClick={() => openEditTask(task)} className="mb-2 w-full text-left">
-          <div className="flex items-center justify-between text-[11px] gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full px-2 py-[4px]" style={{ background: palette.soft, color: '#666' }}>{pillLabel}</span>
               <span className="rounded-full px-2 py-[4px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, ownerId)}</span>
               {isShared ? <span className="rounded-full px-2 py-[4px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
@@ -815,7 +830,10 @@ setShowModal(false);
                   const id = e.target.value;
                   setActiveMemberId(id);
                   const first = tabs.find((t) => t.ownerId === id || (t.isShared && (t.sharedWith || []).includes(id)));
-                  if (first) setCurrentTab(first.id);
+                  if (first) {
+                    setShowAllTasks(false);
+                    setCurrentTab(first.id);
+                  }
                 }}
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               >
@@ -977,10 +995,7 @@ setShowModal(false);
             <div className="p-4 pb-0">
               <button
                 type="button"
-                onClick={() => {
-  setNewItemArea(safeCurrentTab);
-  setShowModal(true);
-}}
+                onClick={openCreateModal}
                 className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-95"
                 style={{ background: palette.text }}
               >
@@ -1136,14 +1151,14 @@ setShowModal(false);
                         <div className="space-y-2">
                           {grouped[key].map((task) => renderTaskCard(task, key))}
                           {grouped[key].length === 0 && (
-                            <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-xl border border-dashed px-3 py-3 text-center text-[12px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                            <button type="button" onClick={openCreateModal} className="w-full rounded-xl border border-dashed px-3 py-3 text-center text-[12px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
                               + Lägg till
                             </button>
                           )}
                         </div>
 
                         {grouped[key].length > 0 && (
-                          <button type="button" onClick={() => setShowModal(true)} className="mt-2 w-full rounded-xl border border-dashed px-3 py-2 text-center text-[12px] transition hover:bg-white" style={{ borderColor: '#d5d5d0', color: '#bbb' }}>
+                          <button type="button" onClick={openCreateModal} className="mt-2 w-full rounded-xl border border-dashed px-3 py-2 text-center text-[12px] transition hover:bg-white" style={{ borderColor: '#d5d5d0', color: '#bbb' }}>
                             + Lägg till
                           </button>
                         )}
@@ -1176,14 +1191,14 @@ setShowModal(false);
                     <div className="space-y-3">
                       {grouped[mobileColumn].map((task) => renderTaskCard(task, mobileColumn))}
                       {grouped[mobileColumn].length === 0 && (
-                        <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-2xl border border-dashed px-3 py-4 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                        <button type="button" onClick={openCreateModal} className="w-full rounded-2xl border border-dashed px-3 py-4 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
                           + Lägg till
                         </button>
                       )}
                     </div>
 
                     {grouped[mobileColumn].length > 0 && (
-                      <button type="button" onClick={() => setShowModal(true)} className="mt-3 w-full rounded-2xl border border-dashed px-3 py-3 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                      <button type="button" onClick={openCreateModal} className="mt-3 w-full rounded-2xl border border-dashed px-3 py-3 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
                         + Lägg till
                       </button>
                     )}
@@ -1194,13 +1209,13 @@ setShowModal(false);
           )}
         </div>
 
-        <button type="button" onClick={() => setShowModal(true)} className="fixed bottom-5 right-5 z-20 rounded-full p-4 text-white shadow-lg md:hidden" style={{ background: palette.text }}>
+        <button type="button" onClick={openCreateModal} className="fixed bottom-5 right-5 z-20 rounded-full p-4 text-white shadow-lg md:hidden" style={{ background: palette.text }}>
           <Plus size={22} />
         </button>
 
         {showModal && (
-          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-start md:p-4 overflow-y-auto">
-            <div className="w-full max-w-md rounded-t-[28px] md:rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
+          <div className="fixed inset-0 z-30 flex items-end justify-center overflow-y-auto bg-black/40 p-0 md:items-start md:p-4">
+            <div className="w-full max-w-md rounded-t-[28px] p-5 shadow-xl md:rounded-3xl" style={{ background: palette.white }}>
               <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{isPrayerView ? 'Nytt böneämne' : 'Ny uppgift'}</h3>
@@ -1210,60 +1225,68 @@ setShowModal(false);
               </div>
 
               <div className="mb-3 text-sm text-neutral-500">
-                {isPrayerView ? 'Det här sparas i din bönelista.' : `Uppgiften sparas i fliken: ${showAllTasks ? currentTabInfo.label : currentTabInfo.label}`}
-              </div>
+  {isPrayerView ? 'Det här sparas i din bönelista.' : 'Välj vilken flik uppgiften ska sparas i.'}
+</div>
 
               <div className="mb-3 text-[11px] text-neutral-400">Sparas till backend i hushållet. Profilvalet minns den här enheten lokalt.</div>
 
               <input
-                value={newItem}
-                onChange={(e) => setNewItem(e.target.value)}
-                placeholder={isPrayerView ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
-                className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                style={{ borderColor: palette.border }}
-              />
+  value={newItem}
+  onChange={(e) => setNewItem(e.target.value)}
+  placeholder={isPrayerView ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
+  className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border }}
+/>
 
-              {!isPrayerView && (
-  <select
-    value={newItemArea}
-    onChange={(e) => setNewItemArea(e.target.value)}
-    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-    style={{ borderColor: palette.border, background: palette.white }}
-  >
-    {visibleTabs
-      .filter((tab) => tab.id !== 'prayer')
-      .map((tab) => (
-        <option key={tab.id} value={tab.id}>
-          {tab.label}
-        </option>
-      ))}
-  </select>
+{!isPrayerView && (
+  <>
+    <select
+      value={newItemArea}
+      onChange={(e) => setNewItemArea(e.target.value)}
+      className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+      style={{ borderColor: palette.border, background: palette.white }}
+    >
+      {visibleTabs
+        .filter((tab) => tab.id !== 'prayer')
+        .map((tab) => (
+          <option key={tab.id} value={tab.id}>
+            {tab.label}
+          </option>
+        ))}
+    </select>
+
+    <input
+      type="time"
+      value={newItemTime}
+      onChange={(e) => setNewItemTime(e.target.value)}
+      className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+      style={{ borderColor: palette.border }}
+    />
+
+    <select
+      value={newItemReminderMinutes}
+      onChange={(e) => setNewItemReminderMinutes(e.target.value)}
+      className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+      style={{ borderColor: palette.border, background: palette.white }}
+    >
+      <option value="">Ingen påminnelse</option>
+      <option value="0">Vid starttid</option>
+      <option value="5">5 min före</option>
+      <option value="10">10 min före</option>
+      <option value="15">15 min före</option>
+      <option value="30">30 min före</option>
+      <option value="60">1 tim före</option>
+      <option value="120">2 tim före</option>
+      <option value="1440">1 dag före</option>
+    </select>
+  </>
 )}
-
-                  <select
-                    value={newItemReminderMinutes}
-                    onChange={(e) => setNewItemReminderMinutes(e.target.value)}
-                    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                    style={{ borderColor: palette.border, background: palette.white }}
-                  >
-                    <option value="">Ingen påminnelse</option>
-                    <option value="0">Vid starttid</option>
-                    <option value="5">5 min före</option>
-                    <option value="10">10 min före</option>
-                    <option value="15">15 min före</option>
-                    <option value="30">30 min före</option>
-                    <option value="60">1 tim före</option>
-                    <option value="120">2 tim före</option>
-                    <option value="1440">1 dag före</option>
-                  </select>
-                </>
-              )}
 
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                   Avbryt
                 </button>
-                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: isPrayerView ? palette.pastor : (showAllTasks ? currentTabInfo.color : currentTabInfo.color) }}>
+                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: isPrayerView ? palette.pastor : currentTabInfo.color }}>
                   Spara
                 </button>
               </div>
@@ -1273,7 +1296,7 @@ setShowModal(false);
 
         {editTaskId && (
           <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-4">
-            <div className="w-full max-w-md rounded-t-[28px] md:rounded-3xl p-5 shadow-xl max-h-[92vh] overflow-y-auto" style={{ background: palette.white }}>
+            <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-[28px] p-5 shadow-xl md:rounded-3xl" style={{ background: palette.white }}>
               <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Redigera uppgift</h3>
@@ -1284,13 +1307,14 @@ setShowModal(false);
 
               <div className="mb-3 text-sm text-neutral-500">Redigera detaljer och påminnelse</div>
 
-              <input
-                value={editTaskTitle}
-                onChange={(e) => setEditTaskTitle(e.target.value)}
-                placeholder="Uppgiftens namn"
-                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                style={{ borderColor: palette.border }}
-              />
+             <input
+  value={editTaskTitle}
+  onChange={(e) => setEditTaskTitle(e.target.value)}
+  placeholder="Uppgiftens namn"
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border }}
+/>
+
 <select
   value={editTaskArea}
   onChange={(e) => setEditTaskArea(e.target.value)}
@@ -1305,44 +1329,44 @@ setShowModal(false);
       </option>
     ))}
 </select>
-              <input
-                type="date"
-                value={editTaskDue}
-                onChange={(e) => setEditTaskDue(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                style={{ borderColor: palette.border }}
-              />
 
-              <input
-                type="time"
-                value={editTaskTime}
-                onChange={(e) => setEditTaskTime(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                style={{ borderColor: palette.border }}
-              />
+<input
+  type="date"
+  value={editTaskDue}
+  onChange={(e) => setEditTaskDue(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border }}
+/>
 
-              <select
-                value={editTaskReminderMinutes}
-                onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                style={{ borderColor: palette.border, background: palette.white }}
-              >
-                <option value="">Ingen påminnelse</option>
-                <option value="0">Vid starttid</option>
-                <option value="5">5 min före</option>
-                <option value="10">10 min före</option>
-                <option value="15">15 min före</option>
-                <option value="30">30 min före</option>
-                <option value="60">1 tim före</option>
-                <option value="120">2 tim före</option>
-                <option value="1440">1 dag före</option>
-              </select>
+<input
+  type="time"
+  value={editTaskTime}
+  onChange={(e) => setEditTaskTime(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border }}
+/>
 
+<select
+  value={editTaskReminderMinutes}
+  onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border, background: palette.white }}
+>
+  <option value="">Ingen påminnelse</option>
+  <option value="0">Vid starttid</option>
+  <option value="5">5 min före</option>
+  <option value="10">10 min före</option>
+  <option value="15">15 min före</option>
+  <option value="30">30 min före</option>
+  <option value="60">1 tim före</option>
+  <option value="120">2 tim före</option>
+  <option value="1440">1 dag före</option>
+</select>
               <textarea
                 value={editTaskNote}
                 onChange={(e) => setEditTaskNote(e.target.value)}
                 placeholder="Notering"
-                className="mb-4 min-h-[110px] w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+                className="mb-4 min-h-[110px] w-full rounded-2xl border px-4 py-3.5 text-base outline-none"
                 style={{ borderColor: palette.border }}
               />
 
@@ -1365,7 +1389,7 @@ setShowModal(false);
 
         {showSettings && (
           <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-4">
-            <div className="w-full max-w-2xl rounded-t-[28px] md:rounded-3xl p-5 shadow-xl max-h-[92vh] overflow-y-auto" style={{ background: palette.white }}>
+            <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] p-5 shadow-xl md:rounded-3xl" style={{ background: palette.white }}>
               <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Inställningar</h3>
@@ -1397,7 +1421,7 @@ setShowModal(false);
                     <button
                       type="button"
                       onClick={copyCalendarUrl}
-                      className="rounded-xl border px-3 py-2 text-xs flex items-center gap-2"
+                      className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
                       style={{ borderColor: palette.border, background: palette.white }}
                     >
                       <Copy size={14} />
@@ -1406,7 +1430,7 @@ setShowModal(false);
 
                     <a
                       href={calendarUrl.replace('https://', 'webcal://')}
-                      className="rounded-xl border px-3 py-2 text-xs text-center"
+                      className="rounded-xl border px-3 py-2 text-center text-xs"
                       style={{ borderColor: palette.border, background: palette.white }}
                     >
                       Öppna i kalender
@@ -1524,7 +1548,7 @@ setShowModal(false);
                 <div className="mb-3 space-y-2">
                   {members.map((member) => (
                     <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2" style={{ borderColor: palette.border, background: palette.white }}>
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
                         <button
                           type="button"
                           onClick={() => setActiveMemberId(member.id)}
