@@ -512,8 +512,7 @@ export default function App() {
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col" style={{ background: palette.page, boxShadow: '0 0 0 1px #e0e0db' }}>
         <header className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-4 md:px-6" style={{ background: palette.white, borderColor: palette.border }}>
           <div>
-            <div className="text-sm font-semibold">Min planering</div>
-            <div className="text-xs text-neutral-400">Egen kalender med familjefokus</div>
+            <div className="text-sm font-semibold">MIGHTY PLANNER</div>
             <div className="mt-1 text-[11px]" style={{ color: palette.subtext }}>Hushåll: {getDisplayFamilyName(familyId)}</div>
             <div className="mt-1 text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : '#888' }}>{backendStatus}</div>
           </div>
