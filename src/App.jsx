@@ -118,6 +118,20 @@ function formatTime(timeString) {
   return timeString.slice(0, 5);
 }
 
+function getTaskDateTime(task) {
+  if (!task.due || !task.dueTime) return null;
+  return new Date(`${task.due}T${task.dueTime}:00`);
+}
+
+function getReminderLabel(reminderMinutes) {
+  if (!reminderMinutes && reminderMinutes !== 0) return 'Ingen påminnelse';
+  if (reminderMinutes === 0) return 'Vid starttid';
+  if (reminderMinutes < 60) return `${reminderMinutes} min före`;
+  const hours = reminderMinutes / 60;
+  if (Number.isInteger(hours)) return `${hours} tim före`;
+  return `${reminderMinutes} min före`;
+}
+
 function formatLongDate(dateString) {
   if (!dateString) return '';
   const date = new Date(`${dateString}T12:00:00`);
@@ -222,6 +236,11 @@ export default function App() {
   const [editTaskDue, setEditTaskDue] = useState('');
   const [editTaskTime, setEditTaskTime] = useState('');
   const [editTaskNote, setEditTaskNote] = useState('');
+  const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
+const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
+const [notificationPermission, setNotificationPermission] = useState(
+  typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+);
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -327,6 +346,45 @@ export default function App() {
 
     savePlanner();
   }, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('Notification' in window)) return;
+    setNotificationPermission(Notification.permission);
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('Notification' in window)) return;
+    if (notificationPermission !== 'granted') return;
+
+    function checkReminders() {
+      const now = Date.now();
+
+      tasks.forEach((task) => {
+        if (task.status === 'done') return;
+        if (!task.due || !task.dueTime) return;
+        if (task.reminderMinutes === '' || task.reminderMinutes === null || task.reminderMinutes === undefined) return;
+
+        const taskDate = getTaskDateTime(task);
+        if (!taskDate) return;
+
+        const reminderTime = taskDate.getTime() - Number(task.reminderMinutes) * 60 * 1000;
+        const reminderKey = `reminded:${familyId}:${task.id}:${task.due}:${task.dueTime}:${task.reminderMinutes}`;
+
+        if (now >= reminderTime && !localStorage.getItem(reminderKey)) {
+          new Notification('Påminnelse', {
+            body: `${task.title}${task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}`,
+          });
+
+          localStorage.setItem(reminderKey, '1');
+        }
+      });
+    }
+
+    checkReminders();
+    const intervalId = setInterval(checkReminders, 60000);
+
+    return () => clearInterval(intervalId);
+  }, [tasks, familyId, notificationPermission]);
 
   const visibleTabs = tabs.filter(
     (tab) => tab.ownerId === activeMemberId || (tab.isShared && (tab.sharedWith || []).includes(activeMemberId))
@@ -377,13 +435,34 @@ export default function App() {
       });
   }, [tasks, safeCurrentTab, selectedDate]);
 
+  async function enableNotifications() {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setBackendStatus('Den här enheten stöder inte notiser');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+
+      if (permission === 'granted') {
+        setBackendStatus('Notiser aktiverade');
+      } else {
+        setBackendStatus('Notiser tilläts inte');
+      }
+    } catch (error) {
+      console.error('Kunde inte aktivera notiser:', error);
+      setBackendStatus('Kunde inte aktivera notiser');
+    }
+  }
+
   function addItem() {
     const trimmed = newItem.trim();
     if (!trimmed) return;
     if (safeCurrentTab === 'prayer') {
       setPrayers((prev) => [...prev, { id: 'p' + Date.now().toString(), title: trimmed, answered: false }]);
     } else {
-      setTasks((prev) => [
+            setTasks((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
@@ -392,13 +471,15 @@ export default function App() {
           area: safeCurrentTab,
           due: selectedDate || '2026-04-21',
           dueTime: newItemTime,
+          reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
           note: '',
         },
       ]);
     }
     setNewItem('');
-    setNewItemTime('');
-    setShowModal(false);
+setNewItemTime('');
+setNewItemReminderMinutes('');
+setShowModal(false);
   }
 
   function moveTask(taskId, nextStatus) {
@@ -418,23 +499,29 @@ export default function App() {
     setPrayers((prev) => prev.filter((prayer) => prayer.id !== prayerId));
   }
 
-  function openEditTask(task) {
+    function openEditTask(task) {
     setEditTaskId(task.id);
     setEditTaskTitle(task.title);
     setEditTaskDue(task.due || '');
     setEditTaskTime(task.dueTime || '');
+    setEditTaskReminderMinutes(
+      task.reminderMinutes === '' || task.reminderMinutes === null || task.reminderMinutes === undefined
+        ? ''
+        : String(task.reminderMinutes)
+    );
     setEditTaskNote(task.note || '');
   }
 
-  function closeEditTask() {
+    function closeEditTask() {
     setEditTaskId(null);
     setEditTaskTitle('');
     setEditTaskDue('');
     setEditTaskTime('');
+    setEditTaskReminderMinutes('');
     setEditTaskNote('');
   }
 
-  function saveEditedTask() {
+    function saveEditedTask() {
     const trimmed = editTaskTitle.trim();
     if (!trimmed || !editTaskId) return;
 
@@ -446,6 +533,7 @@ export default function App() {
               title: trimmed,
               due: editTaskDue,
               dueTime: editTaskTime,
+              reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
               note: editTaskNote,
             }
           : task
@@ -619,6 +707,22 @@ export default function App() {
               className="rounded-xl border px-3 py-2 text-xs"
               style={{ borderColor: palette.border, background: palette.white }}
             >
+                <button
+  type="button"
+  onClick={enableNotifications}
+  className="rounded-xl border px-3 py-2 text-xs"
+  style={{ borderColor: palette.border, background: palette.white }}
+>
+  {notificationPermission === 'granted' ? 'Notiser aktiva' : 'Aktivera notiser'}
+</button>
+             <button
+              type="button"
+              onClick={enableNotifications}
+              className="rounded-xl border px-3 py-2 text-xs"
+              style={{ borderColor: palette.border, background: palette.white }}
+            >
+              {notificationPermission === 'granted' ? 'Notiser aktiva' : 'Aktivera notiser'}
+            </button>   
               Ladda om
             </button>
             <button type="button" onClick={() => setShowSettings(true)} className="rounded-xl border p-2" style={{ borderColor: palette.border, background: palette.white }}>
@@ -685,20 +789,7 @@ export default function App() {
           })}
         </div>
 
-        <div className="border-b px-4 py-2 text-xs" style={{ background: palette.white, borderColor: palette.border, color: palette.subtext }}>
-          <span>Visar fliken </span>
-          <span className="font-medium" style={{ color: palette.text }}>{currentTabInfo.label}</span>
-          <span> · Ägare: </span>
-          <span className="font-medium" style={{ color: palette.text }}>{currentOwner?.name || 'Okänd'}</span>
-          {currentTabInfo?.isShared ? (
-            <>
-              <span> · Delad med: </span>
-              <span className="font-medium" style={{ color: palette.text }}>{currentSharedMembers.map((member) => member.name).join(', ') || 'ingen'}</span>
-            </>
-          ) : (
-            <span> · Privat flik</span>
-          )}
-        </div>
+
 
         <div className="grid flex-1 grid-cols-1 md:grid-cols-[250px_1fr]">
           <aside className="hidden border-r md:flex md:flex-col" style={{ background: palette.white, borderColor: palette.border }}>
@@ -834,7 +925,17 @@ export default function App() {
                                     {task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}
                                   </span>
                                 </div>
-                                {task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
+                                {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
+                                  <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
+                                    Påminnelse: {getReminderLabel(task.reminderMinutes)}
+                                  </div>
+                                ) : null}
+                                {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
+  <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
+    Påminnelse: {getReminderLabel(task.reminderMinutes)}
+  </div>
+) : null}
+{task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
                               </button>
                               <div className="flex flex-wrap gap-1 text-[10px]">
                                 {key !== 'todo' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'todo'); }} className="rounded-md px-2 py-[3px]" style={{ background: palette.soft }}>Att göra</button>}
@@ -878,6 +979,40 @@ export default function App() {
                   style={{ borderColor: palette.border }}
                 />
               )}
+                            {safeCurrentTab !== 'prayer' && (
+                <select
+                  value={newItemReminderMinutes}
+                  onChange={(e) => setNewItemReminderMinutes(e.target.value)}
+                  className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                  style={{ borderColor: palette.border, background: palette.white }}
+                >
+                  <option value="">Ingen påminnelse</option>
+                  <option value="0">Vid starttid</option>
+                  <option value="5">5 min före</option>
+                  <option value="10">10 min före</option>
+                  <option value="15">15 min före</option>
+                  <option value="30">30 min före</option>
+                  <option value="60">1 tim före</option>
+                  <option value="120">2 tim före</option>
+                  <option value="1440">1 dag före</option>
+                </select>
+              )}
+                            <select
+                value={editTaskReminderMinutes}
+                onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
+                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                style={{ borderColor: palette.border, background: palette.white }}
+              >
+                <option value="">Ingen påminnelse</option>
+                <option value="0">Vid starttid</option>
+                <option value="5">5 min före</option>
+                <option value="10">10 min före</option>
+                <option value="15">15 min före</option>
+                <option value="30">30 min före</option>
+                <option value="60">1 tim före</option>
+                <option value="120">2 tim före</option>
+                <option value="1440">1 dag före</option>
+              </select>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>Avbryt</button>
                 <button type="button" onClick={addItem} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>Spara</button>
@@ -903,6 +1038,22 @@ export default function App() {
                 className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
                 style={{ borderColor: palette.border }}
               />
+              <select
+  value={editTaskReminderMinutes}
+  onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+  style={{ borderColor: palette.border, background: palette.white }}
+>
+  <option value="">Ingen påminnelse</option>
+  <option value="0">Vid starttid</option>
+  <option value="5">5 min före</option>
+  <option value="10">10 min före</option>
+  <option value="15">15 min före</option>
+  <option value="30">30 min före</option>
+  <option value="60">1 tim före</option>
+  <option value="120">2 tim före</option>
+  <option value="1440">1 dag före</option>
+</select>
               <textarea value={editTaskNote} onChange={(e) => setEditTaskNote(e.target.value)} placeholder="Notering" className="mb-4 min-h-[100px] w-full rounded-2xl border px-4 py-3 outline-none" style={{ borderColor: palette.border }} />
               <div className="flex justify-between gap-2">
                 <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-2 text-sm text-red-700" style={{ background: '#fcebeb' }}>Ta bort</button>
