@@ -237,10 +237,12 @@ export default function App() {
 
   const [showModal, setShowModal] = useState(false);
   const [newItem, setNewItem] = useState('');
+  const [newItemArea, setNewItemArea] = useState('');
   const [newItemTime, setNewItemTime] = useState('');
   const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
   const [editTaskId, setEditTaskId] = useState(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskArea, setEditTaskArea] = useState('');
   const [editTaskDue, setEditTaskDue] = useState('');
   const [editTaskTime, setEditTaskTime] = useState('');
   const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
@@ -494,14 +496,14 @@ export default function App() {
     if (safeCurrentTab === 'prayer' && !showAllTasks) {
       setPrayers((prev) => [...prev, { id: `p${Date.now()}`, title: trimmed, answered: false }]);
     } else {
-      const targetArea = showAllTasks ? safeCurrentTab : safeCurrentTab;
-      setTasks((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          title: trimmed,
-          status: 'todo',
-          area: targetArea,
+      const targetArea = newItemArea || safeCurrentTab;
+setTasks((prev) => [
+  ...prev,
+  {
+    id: Date.now().toString(),
+    title: trimmed,
+    status: 'todo',
+    area: targetArea,
           due: selectedDate || '2026-04-21',
           dueTime: newItemTime,
           reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
@@ -511,9 +513,10 @@ export default function App() {
     }
 
     setNewItem('');
-    setNewItemTime('');
-    setNewItemReminderMinutes('');
-    setShowModal(false);
+setNewItemTime('');
+setNewItemReminderMinutes('');
+setNewItemArea('');
+setShowModal(false);
   }
 
   function moveTask(taskId, nextStatus) {
@@ -536,6 +539,7 @@ export default function App() {
   function openEditTask(task) {
     setEditTaskId(task.id);
     setEditTaskTitle(task.title);
+    setEditTaskArea(task.area || '');
     setEditTaskDue(task.due || '');
     setEditTaskTime(task.dueTime || '');
     setEditTaskReminderMinutes(
@@ -549,6 +553,7 @@ export default function App() {
   function closeEditTask() {
     setEditTaskId(null);
     setEditTaskTitle('');
+    setEditTaskArea('');
     setEditTaskDue('');
     setEditTaskTime('');
     setEditTaskReminderMinutes('');
@@ -569,7 +574,13 @@ export default function App() {
               dueTime: editTaskTime,
               reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
               note: editTaskNote,
-            }
+        title: trimmed,
+  area: editTaskArea || task.area,
+  due: editTaskDue,
+  dueTime: editTaskTime,
+  reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
+  note: editTaskNote,
+  }
           : task
       )
     );
@@ -966,7 +977,10 @@ export default function App() {
             <div className="p-4 pb-0">
               <button
                 type="button"
-                onClick={() => setShowModal(true)}
+                onClick={() => {
+  setNewItemArea(safeCurrentTab);
+  setShowModal(true);
+}}
                 className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white transition hover:opacity-95"
                 style={{ background: palette.text }}
               >
@@ -1210,14 +1224,21 @@ export default function App() {
               />
 
               {!isPrayerView && (
-                <>
-                  <input
-                    type="time"
-                    value={newItemTime}
-                    onChange={(e) => setNewItemTime(e.target.value)}
-                    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
-                    style={{ borderColor: palette.border }}
-                  />
+  <select
+    value={newItemArea}
+    onChange={(e) => setNewItemArea(e.target.value)}
+    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+    style={{ borderColor: palette.border, background: palette.white }}
+  >
+    {visibleTabs
+      .filter((tab) => tab.id !== 'prayer')
+      .map((tab) => (
+        <option key={tab.id} value={tab.id}>
+          {tab.label}
+        </option>
+      ))}
+  </select>
+)}
 
                   <select
                     value={newItemReminderMinutes}
@@ -1270,7 +1291,20 @@ export default function App() {
                 className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
-
+<select
+  value={editTaskArea}
+  onChange={(e) => setEditTaskArea(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border, background: palette.white }}
+>
+  {visibleTabs
+    .filter((tab) => tab.id !== 'prayer')
+    .map((tab) => (
+      <option key={tab.id} value={tab.id}>
+        {tab.label}
+      </option>
+    ))}
+</select>
               <input
                 type="date"
                 value={editTaskDue}
