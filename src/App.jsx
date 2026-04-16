@@ -174,15 +174,18 @@ function SmallCalendar({ tasks, selectedDate, onSelectDate }) {
           <ChevronRight size={16} />
         </button>
       </div>
+
       <div className="grid grid-cols-7 gap-1 text-center text-[9px]" style={{ color: '#bbb' }}>
         {weekdayNames.map((name) => <div key={name} className="py-1">{name}</div>)}
       </div>
+
       <div className="mt-1 grid grid-cols-7 gap-1 text-center text-[11px]">
         {cells.map((cell, index) => {
           const cellDate = cell.currentMonth ? `${year}-${String(month + 1).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}` : null;
           const isToday = monthOffset === 0 && cell.currentMonth && cell.day === today.getDate();
           const isSelected = cell.currentMonth && cellDate === selectedDate;
           const hasEvent = cell.currentMonth && eventDays.has(cell.day);
+
           return (
             <button
               key={`${cell.day}-${index}`}
@@ -226,6 +229,7 @@ export default function App() {
   const [prayers, setPrayers] = useState(initialPrayers);
   const [selectedDate, setSelectedDate] = useState('2026-04-14');
   const [activeMemberId, setActiveMemberId] = useState('m1');
+  const [mobileColumn, setMobileColumn] = useState('todo');
 
   const [showModal, setShowModal] = useState(false);
   const [newItem, setNewItem] = useState('');
@@ -432,6 +436,10 @@ export default function App() {
         return a.title.localeCompare(b.title, 'sv');
       });
   }, [tasks, safeCurrentTab, selectedDate]);
+
+  useEffect(() => {
+    setMobileColumn('todo');
+  }, [safeCurrentTab]);
 
   async function enableNotifications() {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -672,23 +680,110 @@ export default function App() {
     }
   }
 
+  function renderTaskCard(task, key) {
+    return (
+      <div
+        key={task.id}
+        draggable
+        onDragStart={() => handleDragStart(task.id)}
+        onDragEnd={() => {
+          setDraggingTaskId(null);
+          setDragOverStatus(null);
+        }}
+        className="group rounded-2xl bg-white px-3.5 py-3.5 shadow-sm transition hover:shadow-md"
+        style={{
+          border: `1px solid ${palette.border}`,
+          borderLeft: key === 'doing' ? `3px solid ${currentTabInfo.color}` : `1px solid ${palette.border}`,
+          borderRadius: key === 'doing' ? '0 16px 16px 0' : '16px',
+          opacity: draggingTaskId === task.id ? 0.5 : key === 'done' ? 0.6 : 1,
+          cursor: 'grab',
+        }}
+      >
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                moveTask(task.id, task.status === 'done' ? 'todo' : 'done');
+              }}
+              className="mt-[2px] h-5 w-5 rounded border"
+              style={{ borderColor: '#bbb', background: task.status === 'done' ? palette.family : '#fff' }}
+            />
+            <button type="button" onClick={() => openEditTask(task)} className="min-w-0 text-left">
+              <div className="text-[14px] font-medium leading-snug" style={{ textDecoration: key === 'done' ? 'line-through' : 'none' }}>
+                {task.title}
+              </div>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteTask(task.id);
+            }}
+            className="text-[11px] opacity-70 md:opacity-0 md:group-hover:opacity-100"
+            style={{ color: '#aaa' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <button type="button" onClick={() => openEditTask(task)} className="mb-2 w-full text-left">
+          <div className="flex items-center justify-between text-[11px] gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="rounded-full px-2 py-[4px]" style={{ background: palette.soft, color: '#666' }}>{currentTabInfo.label}</span>
+              <span className="rounded-full px-2 py-[4px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, currentTabInfo.ownerId)}</span>
+              {currentTabInfo.isShared ? <span className="rounded-full px-2 py-[4px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
+            </div>
+            <span style={{ color: '#aaa' }}>
+              {formatShortDate(task.due)}
+              {task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}
+            </span>
+          </div>
+
+          {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
+            <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
+              Påminnelse: {getReminderLabel(task.reminderMinutes)}
+            </div>
+          ) : null}
+
+          {task.note ? <div className="mt-2 text-[12px]" style={{ color: '#888' }}>{task.note}</div> : null}
+        </button>
+
+        <div className="flex flex-wrap gap-1.5 text-[11px]">
+          {key !== 'todo' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'todo'); }} className="rounded-md px-2.5 py-[5px]" style={{ background: palette.soft }}>Att göra</button>}
+          {key !== 'doing' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'doing'); }} className="rounded-md px-2.5 py-[5px]" style={{ background: '#e6f1fb' }}>Pågående</button>}
+          {key !== 'done' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'done'); }} className="rounded-md px-2.5 py-[5px]" style={{ background: '#e1f5ee' }}>Klar</button>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={{ background: palette.bg, color: palette.text }}>
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col" style={{ background: palette.page, boxShadow: '0 0 0 1px #e0e0db' }}>
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b px-4 py-4 md:px-6" style={{ background: palette.white, borderColor: palette.border }}>
-          <div>
-            <div className="text-sm font-semibold">MIGHTY PLANNER</div>
-            <div className="mt-1 text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : palette.subtext }}>
-              {backendStatus}
+        <header className="sticky top-0 z-20 border-b px-4 py-3 md:px-6 md:py-4" style={{ background: palette.white, borderColor: palette.border }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold tracking-[0.02em]">MIGHTY PLANNER</div>
+              <div className="mt-1 text-[11px] md:text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : palette.subtext }}>
+                {backendStatus}
+              </div>
             </div>
+
+            <button type="button" onClick={() => setShowSettings(true)} className="rounded-xl border p-2.5 shrink-0" style={{ borderColor: palette.border, background: palette.white }}>
+              <Settings size={16} />
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: palette.border, background: palette.white }}>
-              <div className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: currentTabInfo?.color || palette.biz }}>
+          <div className="mt-3">
+            <div className="flex items-center gap-2 rounded-2xl border px-3 py-2.5" style={{ borderColor: palette.border, background: palette.white }}>
+              <div className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold text-white" style={{ background: currentTabInfo?.color || palette.biz }}>
                 {getMemberBadge(members.find((m) => m.id === activeMemberId)?.name || '')}
               </div>
-              <span className="text-xs" style={{ color: palette.subtext }}>Profil</span>
+              <span className="text-xs shrink-0" style={{ color: palette.subtext }}>Profil</span>
               <select
                 value={activeMemberId}
                 onChange={(e) => {
@@ -697,24 +792,18 @@ export default function App() {
                   const first = tabs.find((t) => t.ownerId === id || (t.isShared && (t.sharedWith || []).includes(id)));
                   if (first) setCurrentTab(first.id);
                 }}
-                className="text-xs outline-none"
-                style={{ background: 'transparent' }}
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
               >
                 {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-
-            <button type="button" onClick={() => setShowSettings(true)} className="rounded-xl border p-2" style={{ borderColor: palette.border, background: palette.white }}>
-              <Settings size={16} />
-            </button>
           </div>
         </header>
 
-        <div className="flex gap-2 overflow-x-auto border-b px-4 py-2" style={{ background: palette.white, borderColor: palette.border }}>
+        <div className="flex gap-2 overflow-x-auto border-b px-4 py-2 md:px-4" style={{ background: palette.white, borderColor: palette.border }}>
           {visibleTabs.map((tab) => {
             const Icon = getTabIcon(tab.icon);
             const active = safeCurrentTab === tab.id;
-            const ownerName = getMemberName(members, tab.ownerId);
             const sharedCount = (tab.sharedWith || []).length;
 
             return (
@@ -731,13 +820,6 @@ export default function App() {
               >
                 <Icon size={16} />
                 <span>{tab.label}</span>
-
-                {!active && (
-                  <span className="rounded-full px-2 py-[2px] text-[10px]" style={{ background: palette.soft, color: palette.subtext }}>
-                    {ownerName}
-                  </span>
-                )}
-
                 {tab.isShared && sharedCount > 0 && (
                   <span className="rounded-full px-2 py-[2px] text-[10px]" style={{ background: active ? 'rgba(255,255,255,0.18)' : '#e1f5ee', color: active ? '#fff' : '#1D9E75' }}>
                     Delad
@@ -746,6 +828,81 @@ export default function App() {
               </button>
             );
           })}
+        </div>
+
+        <div className="md:hidden border-b px-4 py-3" style={{ background: palette.white, borderColor: palette.border }}>
+          {safeCurrentTab !== 'prayer' ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
+                  <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Vald dag</div>
+                  <div className="mt-1 text-sm font-medium">{formatLongDate(selectedDate)}</div>
+                  <div className="mt-1 text-xs" style={{ color: palette.subtext }}>{selectedDateTasks.length} uppgifter</div>
+                </div>
+
+                <div className="rounded-2xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
+                  <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Översikt</div>
+                  <div className="mt-1 text-sm font-medium">{grouped[mobileColumn].length} i {columnLabels[mobileColumn].toLowerCase()}</div>
+                  <div className="mt-1 text-xs" style={{ color: palette.subtext }}>{stats.todo + stats.doing} aktiva totalt</div>
+                </div>
+              </div>
+
+              <div className="mt-3 overflow-x-auto">
+                <div className="flex gap-2">
+                  {Object.entries(columnLabels).map(([key, label]) => {
+                    const active = mobileColumn === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setMobileColumn(key)}
+                        className="rounded-full border px-3 py-2 text-sm whitespace-nowrap"
+                        style={{
+                          background: active ? currentTabInfo.color : palette.white,
+                          color: active ? '#fff' : palette.text,
+                          borderColor: active ? currentTabInfo.color : palette.border,
+                        }}
+                      >
+                        {label} · {grouped[key].length}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Dagens uppgifter</div>
+                <div className="space-y-2">
+                  {selectedDateTasks.length === 0 ? (
+                    <div className="rounded-2xl border p-3 text-sm" style={{ borderColor: palette.border, background: palette.page, color: '#999' }}>
+                      Inga uppgifter denna dag
+                    </div>
+                  ) : (
+                    selectedDateTasks.slice(0, 3).map((task) => (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => openEditTask(task)}
+                        className="block w-full rounded-2xl border p-3 text-left"
+                        style={{ borderColor: palette.border, background: palette.page }}
+                      >
+                        <div className="text-sm font-medium">{task.title}</div>
+                        <div className="mt-1 text-xs" style={{ color: palette.subtext }}>
+                          {task.dueTime ? `Kl. ${formatTime(task.dueTime)}` : 'Ingen tid'}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-2xl border p-3" style={{ borderColor: palette.border, background: palette.page }}>
+              <div className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#aaa' }}>Bön</div>
+              <div className="mt-1 text-sm font-medium">{prayers.length} ämnen</div>
+              <div className="mt-1 text-xs" style={{ color: palette.subtext }}>{prayers.filter((p) => !p.answered).length} pågående</div>
+            </div>
+          )}
         </div>
 
         <div className="grid flex-1 grid-cols-1 md:grid-cols-[250px_1fr]">
@@ -846,7 +1003,7 @@ export default function App() {
 
           {safeCurrentTab === 'prayer' ? (
             <main className="p-4 md:p-6">
-              <div className="rounded-3xl border p-5" style={{ background: palette.white, borderColor: palette.border }}>
+              <div className="rounded-3xl border p-4 md:p-5" style={{ background: palette.white, borderColor: palette.border }}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-lg font-semibold">Bönelista</h2>
                   <span className="rounded-full px-3 py-1 text-xs" style={{ background: palette.soft }}>{prayers.length} st</span>
@@ -856,7 +1013,7 @@ export default function App() {
                   {prayers.map((prayer) => (
                     <div key={prayer.id} className="flex items-center justify-between gap-3 rounded-2xl border p-4" style={{ borderColor: palette.border, background: prayer.answered ? '#e1f5ee' : palette.white }}>
                       <div className="flex min-w-0 items-center gap-3">
-                        <button type="button" onClick={() => togglePrayer(prayer.id)} className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: prayer.answered ? palette.family : palette.soft }}>
+                        <button type="button" onClick={() => togglePrayer(prayer.id)} className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: prayer.answered ? palette.family : palette.soft }}>
                           {prayer.answered ? <Check size={16} color="#fff" /> : <Heart size={14} />}
                         </button>
                         <div>
@@ -864,7 +1021,7 @@ export default function App() {
                           <div className="text-xs text-neutral-500">{prayer.answered ? 'Besvarad' : 'Pågående bön'}</div>
                         </div>
                       </div>
-                      <button type="button" onClick={() => deletePrayer(prayer.id)} className="rounded-xl px-3 py-1.5 text-xs text-red-700" style={{ background: '#fcebeb' }}>
+                      <button type="button" onClick={() => deletePrayer(prayer.id)} className="rounded-xl px-3 py-2 text-xs text-red-700" style={{ background: '#fcebeb' }}>
                         Ta bort
                       </button>
                     </div>
@@ -875,7 +1032,7 @@ export default function App() {
             </main>
           ) : (
             <main className="p-4 md:p-4">
-              <div className="grid gap-3 md:grid-cols-3 md:items-start">
+              <div className="hidden md:grid gap-3 md:grid-cols-3 md:items-start">
                 {Object.entries(columnLabels).map(([key, label]) => {
                   const dotColor = key === 'todo' ? '#cfcfc8' : currentTabInfo.color;
                   const isDragOver = dragOverStatus === key;
@@ -901,85 +1058,7 @@ export default function App() {
                         onDrop={() => handleDrop(key)}
                       >
                         <div className="space-y-2">
-                          {grouped[key].map((task) => (
-                            <div
-                              key={task.id}
-                              draggable
-                              onDragStart={() => handleDragStart(task.id)}
-                              onDragEnd={() => {
-                                setDraggingTaskId(null);
-                                setDragOverStatus(null);
-                              }}
-                              className="group rounded-xl bg-white px-3 py-3 shadow-sm transition hover:shadow-md"
-                              style={{
-                                border: `1px solid ${palette.border}`,
-                                borderLeft: key === 'doing' ? `3px solid ${currentTabInfo.color}` : `1px solid ${palette.border}`,
-                                borderRadius: key === 'doing' ? '0 12px 12px 0' : '12px',
-                                opacity: draggingTaskId === task.id ? 0.5 : key === 'done' ? 0.6 : 1,
-                                cursor: 'grab',
-                              }}
-                            >
-                              <div className="mb-2 flex items-start justify-between gap-2">
-                                <div className="flex min-w-0 items-start gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      moveTask(task.id, task.status === 'done' ? 'todo' : 'done');
-                                    }}
-                                    className="mt-[2px] h-4 w-4 rounded border"
-                                    style={{ borderColor: '#bbb', background: task.status === 'done' ? palette.family : '#fff' }}
-                                  />
-                                  <button type="button" onClick={() => openEditTask(task)} className="min-w-0 text-left">
-                                    <div className="text-[13px] font-medium leading-snug" style={{ textDecoration: key === 'done' ? 'line-through' : 'none' }}>
-                                      {task.title}
-                                    </div>
-                                  </button>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteTask(task.id);
-                                  }}
-                                  className="opacity-0 group-hover:opacity-100 text-[10px]"
-                                  style={{ color: '#aaa' }}
-                                >
-                                  ✕
-                                </button>
-                              </div>
-
-                              <button type="button" onClick={() => openEditTask(task)} className="mb-2 w-full text-left">
-                                <div className="flex items-center justify-between text-[10px] gap-2">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="rounded-full px-2 py-[3px]" style={{ background: palette.soft, color: '#666' }}>{currentTabInfo.label}</span>
-                                    <span className="rounded-full px-2 py-[3px]" style={{ background: '#f3f3ef', color: '#777' }}>{getMemberName(members, currentTabInfo.ownerId)}</span>
-                                    {currentTabInfo.isShared ? <span className="rounded-full px-2 py-[3px]" style={{ background: '#e1f5ee', color: '#1D9E75' }}>Delad</span> : null}
-                                  </div>
-                                  <span style={{ color: '#aaa' }}>
-                                    {formatShortDate(task.due)}
-                                    {task.dueTime ? ` kl ${formatTime(task.dueTime)}` : ''}
-                                  </span>
-                                </div>
-
-                                {task.reminderMinutes !== '' && task.reminderMinutes !== null && task.reminderMinutes !== undefined ? (
-                                  <div className="mt-2 text-[11px]" style={{ color: '#888' }}>
-                                    Påminnelse: {getReminderLabel(task.reminderMinutes)}
-                                  </div>
-                                ) : null}
-
-                                {task.note ? <div className="mt-2 text-[11px]" style={{ color: '#888' }}>{task.note}</div> : null}
-                              </button>
-
-                              <div className="flex flex-wrap gap-1 text-[10px]">
-                                {key !== 'todo' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'todo'); }} className="rounded-md px-2 py-[3px]" style={{ background: palette.soft }}>Att göra</button>}
-                                {key !== 'doing' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'doing'); }} className="rounded-md px-2 py-[3px]" style={{ background: '#e6f1fb' }}>Pågående</button>}
-                                {key !== 'done' && <button type="button" onClick={(e) => { e.stopPropagation(); moveTask(task.id, 'done'); }} className="rounded-md px-2 py-[3px]" style={{ background: '#e1f5ee' }}>Klar</button>}
-                              </div>
-                            </div>
-                          ))}
-
+                          {grouped[key].map((task) => renderTaskCard(task, key))}
                           {grouped[key].length === 0 && (
                             <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-xl border border-dashed px-3 py-3 text-center text-[12px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
                               + Lägg till
@@ -997,17 +1076,56 @@ export default function App() {
                   );
                 })}
               </div>
+
+              <div className="md:hidden">
+                <section className="min-w-0">
+                  <div className="mb-2 flex items-center justify-between px-1 py-1">
+                    <div className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: palette.subtext }}>
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ background: mobileColumn === 'todo' ? '#cfcfc8' : currentTabInfo.color }} />
+                      {columnLabels[mobileColumn]}
+                    </div>
+                    <span className="rounded-full px-2 py-[2px] text-[11px]" style={{ background: '#e8e8e3', color: '#999' }}>{grouped[mobileColumn].length}</span>
+                  </div>
+
+                  <div
+                    className="min-h-[80px] rounded-xl transition"
+                    style={{ background: 'transparent' }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverStatus(mobileColumn);
+                    }}
+                    onDragLeave={() => setDragOverStatus((prev) => (prev === mobileColumn ? null : prev))}
+                    onDrop={() => handleDrop(mobileColumn)}
+                  >
+                    <div className="space-y-3">
+                      {grouped[mobileColumn].map((task) => renderTaskCard(task, mobileColumn))}
+                      {grouped[mobileColumn].length === 0 && (
+                        <button type="button" onClick={() => setShowModal(true)} className="w-full rounded-2xl border border-dashed px-3 py-4 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                          + Lägg till
+                        </button>
+                      )}
+                    </div>
+
+                    {grouped[mobileColumn].length > 0 && (
+                      <button type="button" onClick={() => setShowModal(true)} className="mt-3 w-full rounded-2xl border border-dashed px-3 py-3 text-center text-[13px]" style={{ borderColor: '#d5d5d0', color: '#bbb', background: 'transparent' }}>
+                        + Lägg till
+                      </button>
+                    )}
+                  </div>
+                </section>
+              </div>
             </main>
           )}
         </div>
 
-        <button type="button" onClick={() => setShowModal(true)} className="fixed bottom-6 right-6 z-20 rounded-full p-4 text-white shadow-lg md:hidden" style={{ background: palette.text }}>
-          <Plus size={20} />
+        <button type="button" onClick={() => setShowModal(true)} className="fixed bottom-5 right-5 z-20 rounded-full p-4 text-white shadow-lg md:hidden" style={{ background: palette.text }}>
+          <Plus size={22} />
         </button>
 
         {showModal && (
-          <div className="fixed inset-0 z-30 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
-            <div className="w-full max-w-md rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-start md:p-4 overflow-y-auto">
+            <div className="w-full max-w-md rounded-t-[28px] md:rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">{safeCurrentTab === 'prayer' ? 'Nytt böneämne' : 'Ny uppgift'}</h3>
                 <button type="button" onClick={() => setShowModal(false)} className="rounded-full p-2" style={{ background: palette.soft }}>
@@ -1025,7 +1143,7 @@ export default function App() {
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 placeholder={safeCurrentTab === 'prayer' ? 'Skriv ett böneämne...' : 'Skriv en uppgift...'}
-                className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
@@ -1035,14 +1153,14 @@ export default function App() {
                     type="time"
                     value={newItemTime}
                     onChange={(e) => setNewItemTime(e.target.value)}
-                    className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                     style={{ borderColor: palette.border }}
                   />
 
                   <select
                     value={newItemReminderMinutes}
                     onChange={(e) => setNewItemReminderMinutes(e.target.value)}
-                    className="mb-4 w-full rounded-2xl border px-4 py-3 outline-none"
+                    className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                     style={{ borderColor: palette.border, background: palette.white }}
                   >
                     <option value="">Ingen påminnelse</option>
@@ -1059,10 +1177,10 @@ export default function App() {
               )}
 
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                   Avbryt
                 </button>
-                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>
+                <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: currentTabInfo.color }}>
                   Spara
                 </button>
               </div>
@@ -1071,8 +1189,9 @@ export default function App() {
         )}
 
         {editTaskId && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-3xl p-5 shadow-xl" style={{ background: palette.white }}>
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-4">
+            <div className="w-full max-w-md rounded-t-[28px] md:rounded-3xl p-5 shadow-xl max-h-[92vh] overflow-y-auto" style={{ background: palette.white }}>
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Redigera uppgift</h3>
                 <button type="button" onClick={closeEditTask} className="rounded-full p-2" style={{ background: palette.soft }}>
@@ -1086,7 +1205,7 @@ export default function App() {
                 value={editTaskTitle}
                 onChange={(e) => setEditTaskTitle(e.target.value)}
                 placeholder="Uppgiftens namn"
-                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
@@ -1094,7 +1213,7 @@ export default function App() {
                 type="date"
                 value={editTaskDue}
                 onChange={(e) => setEditTaskDue(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
@@ -1102,14 +1221,14 @@ export default function App() {
                 type="time"
                 value={editTaskTime}
                 onChange={(e) => setEditTaskTime(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
               <select
                 value={editTaskReminderMinutes}
                 onChange={(e) => setEditTaskReminderMinutes(e.target.value)}
-                className="mb-3 w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border, background: palette.white }}
               >
                 <option value="">Ingen påminnelse</option>
@@ -1127,19 +1246,19 @@ export default function App() {
                 value={editTaskNote}
                 onChange={(e) => setEditTaskNote(e.target.value)}
                 placeholder="Notering"
-                className="mb-4 min-h-[100px] w-full rounded-2xl border px-4 py-3 outline-none"
+                className="mb-4 min-h-[110px] w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
                 style={{ borderColor: palette.border }}
               />
 
               <div className="flex justify-between gap-2">
-                <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-2 text-sm text-red-700" style={{ background: '#fcebeb' }}>
+                <button type="button" onClick={() => deleteTask(editTaskId)} className="rounded-2xl px-4 py-3 text-sm text-red-700" style={{ background: '#fcebeb' }}>
                   Ta bort
                 </button>
                 <div className="flex gap-2">
-                  <button type="button" onClick={closeEditTask} className="rounded-2xl px-4 py-2 text-sm" style={{ background: palette.soft }}>
+                  <button type="button" onClick={closeEditTask} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                     Avbryt
                   </button>
-                  <button type="button" onClick={saveEditedTask} className="rounded-2xl px-4 py-2 text-sm text-white" style={{ background: currentTabInfo.color }}>
+                  <button type="button" onClick={saveEditedTask} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: currentTabInfo.color }}>
                     Spara
                   </button>
                 </div>
@@ -1149,8 +1268,9 @@ export default function App() {
         )}
 
         {showSettings && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-2xl rounded-3xl p-5 shadow-xl max-h-[80vh] overflow-y-auto" style={{ background: palette.white }}>
+          <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-4">
+            <div className="w-full max-w-2xl rounded-t-[28px] md:rounded-3xl p-5 shadow-xl max-h-[92vh] overflow-y-auto" style={{ background: palette.white }}>
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full md:hidden" style={{ background: '#ddd' }} />
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Inställningar</h3>
                 <button type="button" onClick={() => setShowSettings(false)} className="rounded-full p-2" style={{ background: palette.soft }}>
