@@ -79,12 +79,6 @@ const initialTasks = [
   { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '', googleEventId: '', syncEnabled: true },
 ];
 
-const initialTasks = [
-  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', reminderMinutes: 10, note: 'Följ upp med kvitto.' },
-  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', reminderMinutes: 30, note: 'Joh 15 och bön i slutet.' },
-  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', reminderMinutes: 60, note: 'Mjölk, pasta och frukt.' },
-  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '' },
-];
 
 const initialPrayers = [
   { id: 'p1', title: 'Be om lugn i familjen', answered: false },
