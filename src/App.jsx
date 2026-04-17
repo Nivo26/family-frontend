@@ -17,8 +17,8 @@ import {
   Layers3,
 } from 'lucide-react';
 
-const API_URL = 'https://family-backend-w852.onrender.com/api/planner';
-const API_BASE_URL = 'https://family-backend-w852.onrender.com';
+const API_URL = 'https://family-backendv2.onrender.com/api/planner';
+const API_BASE_URL = 'https://family-backendv2.onrender.com';
 
 function getInitialFamilyId() {
   const params = new URLSearchParams(window.location.search);
@@ -72,13 +72,19 @@ const initialMembers = [
   { id: 'm2', name: 'Johanna' },
 ];
 
+const initialTabs = [
+  { id: 'biz', label: 'Företaget', color: palette.biz, icon: 'briefcase', locked: false, ownerId: 'm1', isShared: false, sharedWith: [] },
+  { id: 'pastor', label: 'Pastor', color: palette.pastor, icon: 'church', locked: false, ownerId: 'm1', isShared: false, sharedWith: [] },
+  { id: 'family', label: 'Familj', color: palette.family, icon: 'home', locked: false, ownerId: 'm1', isShared: true, sharedWith: ['m2'] },
+  { id: 'prayer', label: 'Bön', color: palette.pastor, icon: 'heart', locked: true, ownerId: 'm1', isShared: true, sharedWith: ['m2'] },
+];
+
 const initialTasks = [
   { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', reminderMinutes: 10, note: 'Följ upp med kvitto.', googleEventId: '', syncEnabled: true },
   { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', reminderMinutes: 30, note: 'Joh 15 och bön i slutet.', googleEventId: '', syncEnabled: true },
   { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', reminderMinutes: 60, note: 'Mjölk, pasta och frukt.', googleEventId: '', syncEnabled: true },
   { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '', googleEventId: '', syncEnabled: true },
 ];
-
 
 const initialPrayers = [
   { id: 'p1', title: 'Be om lugn i familjen', answered: false },
@@ -324,29 +330,29 @@ const [editTaskNote, setEditTaskNote] = useState('');
     async function savePlanner() {
       try {
         const response = await fetch(apiUrlWithFamily, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    members,
-    tabs,
-    tasks,
-    prayers,
-    currentTab,
-    selectedDate,
-  }),
-});
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            members,
+            tabs,
+            tasks,
+            prayers,
+            currentTab,
+            selectedDate,
+          }),
+        });
 
-if (!response.ok) {
-  throw new Error(`Kunde inte spara. Status ${response.status}`);
-}
+        if (!response.ok) {
+          throw new Error(`Kunde inte spara. Status ${response.status}`);
+        }
 
-const data = await response.json();
+        const data = await response.json();
 
-if (data.tasks) {
-  setTasks(data.tasks);
-}
+        if (data.tasks) {
+          setTasks(data.tasks);
+        }
 
-setBackendStatus(`Synkad med backend · ${familyId}`);
+        setBackendStatus(`Synkad med backend · ${familyId}`);
       } catch (error) {
         console.error('Kunde inte spara till backend:', error);
         setBackendStatus(`Kunde inte spara till backend · ${familyId}`);
@@ -528,9 +534,9 @@ function addItem() {
         dueTime: newItemTime,
         reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
         note: '',
-         googleEventId: '',
-         syncEnabled: true,
-    }
+        googleEventId: '',
+        syncEnabled: true,
+      },
     ]);
   }
 
@@ -591,15 +597,15 @@ function closeEditTask() {
       task.id === editTaskId
         ? {
             ...task,
-             title: trimmed,
+            title: trimmed,
             area: editTaskArea || task.area,
             due: editTaskDue,
             dueTime: editTaskTime,
-             reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
-             note: editTaskNote,
-             googleEventId: task.googleEventId || '',
+            reminderMinutes: editTaskReminderMinutes === '' ? '' : Number(editTaskReminderMinutes),
+            note: editTaskNote,
+            googleEventId: task.googleEventId || '',
             syncEnabled: task.syncEnabled !== false,
-            }
+          }
         : task
     )
   );
@@ -792,12 +798,13 @@ function closeEditTask() {
               Påminnelse: {getReminderLabel(task.reminderMinutes)}
             </div>
           ) : null}
-            {task.googleEventId ? (
-            <div className="mt-2 text-[11px]" style={{ color: '#1D9E75' }}>
-                Synkad med Google Kalender
-            </div>
-        ) : null}
+
           {task.note ? <div className="mt-2 text-[12px]" style={{ color: '#888' }}>{task.note}</div> : null}
+          {task.googleEventId ? (
+            <div className="mt-2 text-[11px]" style={{ color: '#1D9E75' }}>
+              Synkad med Google Kalender
+            </div>
+          ) : null}
         </button>
 
         <div className="flex flex-wrap gap-1.5 text-[11px]">
