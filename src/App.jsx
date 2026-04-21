@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Home,
@@ -261,6 +261,8 @@ const [editTaskNote, setEditTaskNote] = useState('');
 
   const [backendStatus, setBackendStatus] = useState('Ansluter till backend...');
   const [hasLoadedFromBackend, setHasLoadedFromBackend] = useState(false);
+  const skipNextSaveRef = useRef(false);
+  const lastSavedTasksJsonRef = useRef('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -325,42 +327,62 @@ const [editTaskNote, setEditTaskNote] = useState('');
   }, [familyId, apiUrlWithFamily]);
 
   useEffect(() => {
-    if (!hasLoadedFromBackend) return;
+  if (!hasLoadedFromBackend) return;
 
-    async function savePlanner() {
-      try {
-        const response = await fetch(apiUrlWithFamily, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            members,
-            tabs,
-            tasks,
-            prayers,
-            currentTab,
-            selectedDate,
-          }),
-        });
+  const tasksJson = JSON.stringify(tasks);
 
-        if (!response.ok) {
-          throw new Error(`Kunde inte spara. Status ${response.status}`);
-        }
+  if (skipNextSaveRef.current) {
+    skipNextSaveRef.current = false;
+    lastSavedTasksJsonRef.current = tasksJson;
+    return;
+  }
 
-        const data = await response.json();
+  if (lastSavedTasksJsonRef.current === tasksJson) {
+    return;
+  }
 
-        if (data.tasks) {
+  async function savePlanner() {
+    try {
+      const response = await fetch(apiUrlWithFamily, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          members,
+          tabs,
+          tasks,
+          prayers,
+          currentTab,
+          selectedDate,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Kunde inte spara. Status ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.tasks) {
+        const returnedTasksJson = JSON.stringify(data.tasks);
+        lastSavedTasksJsonRef.current = returnedTasksJson;
+
+        if (returnedTasksJson !== tasksJson) {
+          skipNextSaveRef.current = true;
           setTasks(data.tasks);
         }
-
-        setBackendStatus(`Synkad med backend · ${familyId}`);
-      } catch (error) {
-        console.error('Kunde inte spara till backend:', error);
-        setBackendStatus(`Kunde inte spara till backend · ${familyId}`);
+      } else {
+        lastSavedTasksJsonRef.current = tasksJson;
       }
-    }
 
-    savePlanner();
-  }, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
+      setBackendStatus(`Synkad med backend · ${familyId}`);
+    } catch (error) {
+      console.error('Kunde inte spara till backend:', error);
+      setBackendStatus(`Kunde inte spara till backend · ${familyId}`);
+    }
+  }
+
+  savePlanner();
+}, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
