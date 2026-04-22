@@ -140,7 +140,7 @@ function formatLongDate(dateString) {
 }
 
 function SmallCalendar({ tasks, selectedDate, onSelectDate }) {
-  const today = new Date('2026-04-14T12:00:00');
+  const today = new Date();
   const initialOffset = selectedDate
     ? (Number(selectedDate.slice(0, 4)) - today.getFullYear()) * 12 + (Number(selectedDate.slice(5, 7)) - 1 - today.getMonth())
     : 0;
@@ -229,7 +229,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState('biz');
   const [tasks, setTasks] = useState(initialTasks);
   const [prayers, setPrayers] = useState(initialPrayers);
-  const [selectedDate, setSelectedDate] = useState('2026-04-14');
+  const [selectedDate, setSelectedDate] = useState(() => {
+  const today = new Date();
+  return today.toISOString().slice(0, 10);
+});
   const [activeMemberId, setActiveMemberId] = useState('m1');
   const [mobileColumn, setMobileColumn] = useState('todo');
   const [showAllTasks, setShowAllTasks] = useState(false);
