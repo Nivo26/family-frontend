@@ -310,6 +310,7 @@ export default function App() {
 
   const [showModal, setShowModal] = useState(false);
 const [newItem, setNewItem] = useState('');
+const [newItemNote, setNewItemNote] = useState('');
 const [newItemArea, setNewItemArea] = useState('');
 const [newItemTime, setNewItemTime] = useState('');
 const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
@@ -639,7 +640,7 @@ function addItem() {
         due: selectedDate || '2026-04-21',
         dueTime: newItemTime,
         reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
-        note: '',
+        note: newItemNote,
         googleEventId: '',
         syncEnabled: true,
         repeat: newItemRepeat,
@@ -648,6 +649,7 @@ function addItem() {
   }
 
   setNewItem('');
+  setNewItemNote('');
   setNewItemArea('');
   setNewItemTime('');
   setNewItemReminderMinutes('');
@@ -1369,6 +1371,13 @@ function closeEditTask() {
   className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
   style={{ borderColor: palette.border }}
 />
+<textarea
+  value={newItemNote}
+  onChange={(e) => setNewItemNote(e.target.value)}
+  placeholder="Anteckning, valfritt..."
+  className="mb-4 min-h-[90px] w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+  style={{ borderColor: palette.border }}
+/>
 
 {!isPrayerView && (
   <>
@@ -1426,7 +1435,7 @@ function closeEditTask() {
 )}
 
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
+                <button type="button" onClick={() => {setShowModal(false);setNewItemNote('');}} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                   Avbryt
                 </button>
                 <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: isPrayerView ? palette.pastor : currentTabInfo.color }}>
