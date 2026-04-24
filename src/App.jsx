@@ -574,8 +574,7 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
         : safeCurrentTab;
 
     setNewItem('');
-    setNewItemNote('');
-    setNewItemTime('09:00');
+    setNewItemTime('');
     setNewItemReminderMinutes('');
     setNewItemRepeat('none');
     setNewItemArea(defaultArea);
@@ -638,8 +637,8 @@ function addItem() {
         title: trimmed,
         status: 'todo',
         area: targetArea,
-        due: selectedDate || new Date().toISOString().slice(0, 10),
-        dueTime: newItemTime || '09:00',
+        due: selectedDate || '2026-04-21',
+        dueTime: newItemTime,
         reminderMinutes: newItemReminderMinutes === '' ? '' : Number(newItemReminderMinutes),
         note: newItemNote,
         googleEventId: '',
@@ -652,7 +651,7 @@ function addItem() {
   setNewItem('');
   setNewItemNote('');
   setNewItemArea('');
-  setNewItemTime('09:00');
+  setNewItemTime('');
   setNewItemReminderMinutes('');
   setNewItemRepeat('none');
   setShowModal(false);
@@ -942,9 +941,20 @@ function closeEditTask() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold tracking-[0.02em]">MIGHTY PLANNER</div>
-              <div className="mt-1 text-[11px] md:text-[11px]" style={{ color: backendStatus.includes('Synkad') ? '#1D9E75' : palette.subtext }}>
-                {backendStatus}
-              </div>
+              <div className="mt-1 flex items-center gap-2">
+  <div
+    style={{
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      backgroundColor: backendStatus.includes('Synkad')
+        ? '#1D9E75'
+        : backendStatus.includes('Sparar')
+        ? '#facc15'
+        : '#ef4444',
+    }}
+  />
+</div>
             </div>
 
             <button type="button" onClick={() => setShowSettings(true)} className="rounded-xl border p-2.5 shrink-0" style={{ borderColor: palette.border, background: palette.white }}>
@@ -1372,16 +1382,13 @@ function closeEditTask() {
   className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
   style={{ borderColor: palette.border }}
 />
-
-{!isPrayerView && (
-  <textarea
-    value={newItemNote}
-    onChange={(e) => setNewItemNote(e.target.value)}
-    placeholder="Anteckning, valfritt..."
-    className="mb-4 min-h-[90px] w-full rounded-2xl border px-4 py-3.5 text-base outline-none"
-    style={{ borderColor: palette.border }}
-  />
-)}
+<textarea
+  value={newItemNote}
+  onChange={(e) => setNewItemNote(e.target.value)}
+  placeholder="Anteckning, valfritt..."
+  className="mb-4 min-h-[90px] w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+  style={{ borderColor: palette.border }}
+/>
 
 {!isPrayerView && (
   <>
@@ -1439,7 +1446,7 @@ function closeEditTask() {
 )}
 
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => { setShowModal(false); setNewItem(''); setNewItemNote(''); setNewItemArea(''); setNewItemTime('09:00'); setNewItemReminderMinutes(''); setNewItemRepeat('none'); }} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
+                <button type="button" onClick={() => {setShowModal(false);setNewItemNote('');}} className="rounded-2xl px-4 py-3 text-sm" style={{ background: palette.soft }}>
                   Avbryt
                 </button>
                 <button type="button" onClick={addItem} className="rounded-2xl px-4 py-3 text-sm text-white" style={{ background: isPrayerView ? palette.pastor : currentTabInfo.color }}>
