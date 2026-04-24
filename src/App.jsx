@@ -80,10 +80,10 @@ const initialTabs = [
 ];
 
 const initialTasks = [
-  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', reminderMinutes: 10, note: 'Följ upp med kvitto.', googleEventId: '', syncEnabled: true },
-  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', reminderMinutes: 30, note: 'Joh 15 och bön i slutet.', googleEventId: '', syncEnabled: true },
-  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', reminderMinutes: 60, note: 'Mjölk, pasta och frukt.', googleEventId: '', syncEnabled: true },
-  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '', googleEventId: '', syncEnabled: true },
+  { id: '1', title: 'Skicka faktura', status: 'todo', area: 'biz', due: '2026-04-18', dueTime: '09:00', reminderMinutes: 10, note: 'Följ upp med kvitto.', googleEventId: '', syncEnabled: true, repeat: 'none' },
+  { id: '2', title: 'Förbered predikan', status: 'doing', area: 'pastor', due: '2026-04-20', dueTime: '13:30', reminderMinutes: 30, note: 'Joh 15 och bön i slutet.', googleEventId: '', syncEnabled: true, repeat: 'none' },
+  { id: '3', title: 'Handla middag', status: 'todo', area: 'family', due: '2026-04-16', dueTime: '16:00', reminderMinutes: 60, note: 'Mjölk, pasta och frukt.', googleEventId: '', syncEnabled: true, repeat: 'weekly' },
+  { id: '4', title: 'Ring familjen Svensson', status: 'done', area: 'pastor', due: '2026-04-12', dueTime: '10:15', reminderMinutes: '', note: '', googleEventId: '', syncEnabled: true, repeat: 'none' },
 ];
 
 const initialPrayers = [
@@ -131,6 +131,12 @@ function getReminderLabel(reminderMinutes) {
   const hours = reminderMinutes / 60;
   if (Number.isInteger(hours)) return `${hours} tim före`;
   return `${reminderMinutes} min före`;
+}
+
+function getRepeatLabel(repeat) {
+  if (repeat === 'weekly') return 'Varje vecka';
+  if (repeat === 'monthly') return 'Varje månad';
+  return 'Ingen repetition';
 }
 
 function formatLongDate(dateString) {
@@ -230,9 +236,9 @@ export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
   const [prayers, setPrayers] = useState(initialPrayers);
   const [selectedDate, setSelectedDate] = useState(() => {
-  const today = new Date();
-  return today.toISOString().slice(0, 10);
-});
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  });
   const [activeMemberId, setActiveMemberId] = useState('m1');
   const [mobileColumn, setMobileColumn] = useState('todo');
   const [showAllTasks, setShowAllTasks] = useState(false);
@@ -243,6 +249,7 @@ const [newItem, setNewItem] = useState('');
 const [newItemArea, setNewItemArea] = useState('');
 const [newItemTime, setNewItemTime] = useState('');
 const [newItemReminderMinutes, setNewItemReminderMinutes] = useState('');
+const [newItemRepeat, setNewItemRepeat] = useState('none');
 const [editTaskId, setEditTaskId] = useState(null);
 const [editTaskTitle, setEditTaskTitle] = useState('');
 const [editTaskArea, setEditTaskArea] = useState('');
@@ -250,6 +257,7 @@ const [editTaskDue, setEditTaskDue] = useState('');
 const [editTaskTime, setEditTaskTime] = useState('');
 const [editTaskReminderMinutes, setEditTaskReminderMinutes] = useState('');
 const [editTaskNote, setEditTaskNote] = useState('');
+const [editTaskRepeat, setEditTaskRepeat] = useState('none');
 
   const [draggingTaskId, setDraggingTaskId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -311,7 +319,11 @@ const [editTaskNote, setEditTaskNote] = useState('');
 
         if (data.members) setMembers(data.members);
         if (data.tabs) setTabs(data.tabs);
-        if (data.tasks) setTasks(data.tasks);
+        if (data.tasks) {
+          skipNextSaveRef.current = true;
+          lastSavedTasksJsonRef.current = JSON.stringify(data.tasks);
+          setTasks(data.tasks);
+        }
         if (data.prayers) setPrayers(data.prayers);
         if (data.currentTab) setCurrentTab(data.currentTab);
         if (data.selectedDate) setSelectedDate(data.selectedDate);
@@ -330,62 +342,62 @@ const [editTaskNote, setEditTaskNote] = useState('');
   }, [familyId, apiUrlWithFamily]);
 
   useEffect(() => {
-  if (!hasLoadedFromBackend) return;
+    if (!hasLoadedFromBackend) return;
 
-  const tasksJson = JSON.stringify(tasks);
+    const tasksJson = JSON.stringify(tasks);
 
-  if (skipNextSaveRef.current) {
-    skipNextSaveRef.current = false;
-    lastSavedTasksJsonRef.current = tasksJson;
-    return;
-  }
-
-  if (lastSavedTasksJsonRef.current === tasksJson) {
-    return;
-  }
-
-  async function savePlanner() {
-    try {
-      const response = await fetch(apiUrlWithFamily, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          members,
-          tabs,
-          tasks,
-          prayers,
-          currentTab,
-          selectedDate,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Kunde inte spara. Status ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.tasks) {
-        const returnedTasksJson = JSON.stringify(data.tasks);
-        lastSavedTasksJsonRef.current = returnedTasksJson;
-
-        if (returnedTasksJson !== tasksJson) {
-          skipNextSaveRef.current = true;
-          setTasks(data.tasks);
-        }
-      } else {
-        lastSavedTasksJsonRef.current = tasksJson;
-      }
-
-      setBackendStatus(`Synkad med backend · ${familyId}`);
-    } catch (error) {
-      console.error('Kunde inte spara till backend:', error);
-      setBackendStatus(`Kunde inte spara till backend · ${familyId}`);
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      lastSavedTasksJsonRef.current = tasksJson;
+      return;
     }
-  }
 
-  savePlanner();
-}, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
+    if (lastSavedTasksJsonRef.current === tasksJson) {
+      return;
+    }
+
+    async function savePlanner() {
+      try {
+        const response = await fetch(apiUrlWithFamily, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            members,
+            tabs,
+            tasks,
+            prayers,
+            currentTab,
+            selectedDate,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Kunde inte spara. Status ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.tasks) {
+          const returnedTasksJson = JSON.stringify(data.tasks);
+          lastSavedTasksJsonRef.current = returnedTasksJson;
+
+          if (returnedTasksJson !== tasksJson) {
+            skipNextSaveRef.current = true;
+            setTasks(data.tasks);
+          }
+        } else {
+          lastSavedTasksJsonRef.current = tasksJson;
+        }
+
+        setBackendStatus(`Synkad med backend · ${familyId}`);
+      } catch (error) {
+        console.error('Kunde inte spara till backend:', error);
+        setBackendStatus(`Kunde inte spara till backend · ${familyId}`);
+      }
+    }
+
+    savePlanner();
+  }, [members, tabs, tasks, prayers, currentTab, selectedDate, hasLoadedFromBackend, familyId, apiUrlWithFamily]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -495,6 +507,7 @@ const [editTaskNote, setEditTaskNote] = useState('');
     setNewItem('');
     setNewItemTime('');
     setNewItemReminderMinutes('');
+    setNewItemRepeat('none');
     setNewItemArea(defaultArea);
     setNewItemArea(safeCurrentTab === 'prayer' ? 'family' : safeCurrentTab);
 setShowModal(true);
@@ -561,6 +574,7 @@ function addItem() {
         note: '',
         googleEventId: '',
         syncEnabled: true,
+        repeat: newItemRepeat,
       },
     ]);
   }
@@ -569,6 +583,7 @@ function addItem() {
   setNewItemArea('');
   setNewItemTime('');
   setNewItemReminderMinutes('');
+  setNewItemRepeat('none');
   setShowModal(false);
 }
 
@@ -603,6 +618,7 @@ function addItem() {
       : String(task.reminderMinutes)
   );
   setEditTaskNote(task.note || '');
+  setEditTaskRepeat(task.repeat || 'none');
 }
 function closeEditTask() {
   setEditTaskId(null);
@@ -612,6 +628,7 @@ function closeEditTask() {
   setEditTaskTime('');
   setEditTaskReminderMinutes('');
   setEditTaskNote('');
+  setEditTaskRepeat('none');
 }
   function saveEditedTask() {
   const trimmed = editTaskTitle.trim();
@@ -630,6 +647,7 @@ function closeEditTask() {
             note: editTaskNote,
             googleEventId: task.googleEventId || '',
             syncEnabled: task.syncEnabled !== false,
+            repeat: editTaskRepeat,
           }
         : task
     )
@@ -824,12 +842,13 @@ function closeEditTask() {
             </div>
           ) : null}
 
-          {task.note ? <div className="mt-2 text-[12px]" style={{ color: '#888' }}>{task.note}</div> : null}
-          {task.googleEventId ? (
-            <div className="mt-2 text-[11px]" style={{ color: '#1D9E75' }}>
-              Synkad med Google Kalender
+          {task.repeat && task.repeat !== 'none' ? (
+            <div className="mt-2 text-[11px]" style={{ color: '#7F77DD' }}>
+              Upprepas: {getRepeatLabel(task.repeat)}
             </div>
           ) : null}
+
+          {task.note ? <div className="mt-2 text-[12px]" style={{ color: '#888' }}>{task.note}</div> : null}
         </button>
 
         <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -1304,6 +1323,17 @@ function closeEditTask() {
     />
 
     <select
+      value={newItemRepeat}
+      onChange={(e) => setNewItemRepeat(e.target.value)}
+      className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+      style={{ borderColor: palette.border, background: palette.white }}
+    >
+      <option value="none">Ingen repetition</option>
+      <option value="weekly">Varje vecka</option>
+      <option value="monthly">Varje månad</option>
+    </select>
+
+    <select
       value={newItemReminderMinutes}
       onChange={(e) => setNewItemReminderMinutes(e.target.value)}
       className="mb-4 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
@@ -1401,6 +1431,17 @@ function closeEditTask() {
   <option value="60">1 tim före</option>
   <option value="120">2 tim före</option>
   <option value="1440">1 dag före</option>
+</select>
+
+<select
+  value={editTaskRepeat}
+  onChange={(e) => setEditTaskRepeat(e.target.value)}
+  className="mb-3 w-full rounded-2xl border px-4 py-3.5 outline-none text-base"
+  style={{ borderColor: palette.border, background: palette.white }}
+>
+  <option value="none">Ingen repetition</option>
+  <option value="weekly">Varje vecka</option>
+  <option value="monthly">Varje månad</option>
 </select>
               <textarea
                 value={editTaskNote}
