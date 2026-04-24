@@ -384,11 +384,10 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
 
         if (data.members) setMembers(data.members);
         if (data.tabs) setTabs(data.tabs);
-        if (data.tasks) {
-          skipNextSaveRef.current = true;
-          lastSavedTasksJsonRef.current = JSON.stringify(data.tasks);
-          setTasks(data.tasks);
-        }
+      if (data.tasks) {
+  lastSavedTasksJsonRef.current = JSON.stringify(data.tasks);
+  setTasks(data.tasks);
+}
         if (data.prayers) setPrayers(data.prayers);
         if (data.currentTab) setCurrentTab(data.currentTab);
         if (data.selectedDate) setSelectedDate(data.selectedDate);
@@ -412,10 +411,8 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
     const tasksJson = JSON.stringify(tasks);
 
     if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false;
-      lastSavedTasksJsonRef.current = tasksJson;
-      return;
-    }
+  skipNextSaveRef.current = false;
+}
 
     if (lastSavedTasksJsonRef.current === tasksJson) {
       return;
@@ -447,7 +444,6 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
           lastSavedTasksJsonRef.current = returnedTasksJson;
 
           if (returnedTasksJson !== tasksJson) {
-            skipNextSaveRef.current = true;
             setTasks(data.tasks);
           }
         } else {
