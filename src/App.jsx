@@ -145,6 +145,70 @@ function formatLongDate(dateString) {
   return date.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+
+function formatDateLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateString(dateString, days) {
+  const date = new Date(`${dateString}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return formatDateLocal(date);
+}
+
+function addMonthsToDateString(dateString, months) {
+  const source = new Date(`${dateString}T12:00:00`);
+  const originalDay = source.getDate();
+  const targetYear = source.getFullYear();
+  const targetMonthIndex = source.getMonth() + months;
+  const lastDayInTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
+  const safeDay = Math.min(originalDay, lastDayInTargetMonth);
+  const nextDate = new Date(targetYear, targetMonthIndex, safeDay, 12, 0, 0);
+  return formatDateLocal(nextDate);
+}
+
+function expandRecurringTasksForCalendar(baseTasks, weeksAhead = 12) {
+  const today = new Date();
+  const horizon = new Date(today.getFullYear(), today.getMonth(), today.getDate() + weeksAhead * 7, 12, 0, 0);
+  const expanded = [...baseTasks];
+
+  baseTasks.forEach((task) => {
+    const repeat = task.repeat || 'none';
+    if (repeat === 'none' || !task.due) return;
+
+    let nextDue = task.due;
+    let guard = 0;
+
+    while (guard < 80) {
+      guard += 1;
+      if (repeat === 'weekly') {
+        nextDue = addDaysToDateString(nextDue, 7);
+      } else if (repeat === 'monthly') {
+        nextDue = addMonthsToDateString(nextDue, 1);
+      } else {
+        return;
+      }
+
+      const instanceDate = new Date(`${nextDue}T12:00:00`);
+      if (instanceDate > horizon) break;
+
+      expanded.push({
+        ...task,
+        id: `${task.id}__repeat__${nextDue}`,
+        parentTaskId: task.id,
+        due: nextDue,
+        googleEventId: '',
+        isRecurringInstance: true,
+      });
+    }
+  });
+
+  return expanded;
+}
+
 function SmallCalendar({ tasks, selectedDate, onSelectDate }) {
   const today = new Date();
   const initialOffset = selectedDate
@@ -452,7 +516,11 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
     ? tasks.filter((task) => task.area !== 'prayer')
     : tasks.filter((task) => task.area === safeCurrentTab);
 
-  const calendarTasks = showAllTasks ? tasks.filter((task) => task.area !== 'prayer') : taskScope;
+  const calendarBaseTasks = showAllTasks ? tasks.filter((task) => task.area !== 'prayer') : taskScope;
+
+  const calendarTasks = useMemo(() => {
+    return expandRecurringTasksForCalendar(calendarBaseTasks, 12);
+  }, [calendarBaseTasks]);
 
   const grouped = useMemo(() => {
     return {
@@ -483,7 +551,7 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
   }, [tasks, prayers]);
 
   const selectedDateTasks = useMemo(() => {
-    return taskScope
+    return calendarTasks
       .filter((task) => task.due === selectedDate)
       .sort((a, b) => {
         const aTime = a.dueTime || '23:59';
@@ -491,7 +559,7 @@ const [editTaskRepeat, setEditTaskRepeat] = useState('none');
         if (aTime !== bTime) return aTime.localeCompare(bTime);
         return a.title.localeCompare(b.title, 'sv');
       });
-  }, [taskScope, selectedDate]);
+  }, [calendarTasks, selectedDate]);
 
   useEffect(() => {
     setMobileColumn('todo');
@@ -607,18 +675,22 @@ function addItem() {
 
 
  function openEditTask(task) {
-  setEditTaskId(task.id);
-  setEditTaskTitle(task.title);
-  setEditTaskArea(task.area || '');
-  setEditTaskDue(task.due || '');
-  setEditTaskTime(task.dueTime || '');
+  const realTask = task.isRecurringInstance
+    ? tasks.find((item) => item.id === task.parentTaskId) || task
+    : task;
+
+  setEditTaskId(realTask.id);
+  setEditTaskTitle(realTask.title);
+  setEditTaskArea(realTask.area || '');
+  setEditTaskDue(realTask.due || '');
+  setEditTaskTime(realTask.dueTime || '');
   setEditTaskReminderMinutes(
-    task.reminderMinutes === '' || task.reminderMinutes === null || task.reminderMinutes === undefined
+    realTask.reminderMinutes === '' || realTask.reminderMinutes === null || realTask.reminderMinutes === undefined
       ? ''
-      : String(task.reminderMinutes)
+      : String(realTask.reminderMinutes)
   );
-  setEditTaskNote(task.note || '');
-  setEditTaskRepeat(task.repeat || 'none');
+  setEditTaskNote(realTask.note || '');
+  setEditTaskRepeat(realTask.repeat || 'none');
 }
 function closeEditTask() {
   setEditTaskId(null);
@@ -1031,7 +1103,7 @@ function closeEditTask() {
                         >
                           <div className="text-sm font-medium">{task.title}</div>
                           <div className="mt-1 text-xs" style={{ color: palette.subtext }}>
-                            {(taskTab?.label || 'Flik')} · {task.dueTime ? `Kl. ${formatTime(task.dueTime)}` : 'Ingen tid'}
+                            {(taskTab?.label || 'Flik')} · {task.dueTime ? `Kl. ${formatTime(task.dueTime)}` : 'Ingen tid'}{task.isRecurringInstance ? ' · Framtida repetition' : ''}
                           </div>
                         </button>
                       );
@@ -1090,6 +1162,7 @@ function closeEditTask() {
                             <div className="text-[12px] text-neutral-800">{task.title}</div>
                             <div className="mt-1 text-[10px] text-neutral-500">{taskTab?.label || currentTabInfo.label}</div>
                             {task.dueTime ? <div className="mt-1 text-[10px] text-neutral-500">Kl. {formatTime(task.dueTime)}</div> : null}
+                            {task.isRecurringInstance ? <div className="mt-1 text-[10px] text-neutral-500">Framtida repetition</div> : null}
                             {task.note ? <div className="mt-1 text-[10px] text-neutral-500">{task.note}</div> : null}
                           </button>
                         );
